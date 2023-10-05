@@ -1,15 +1,11 @@
 // ───── Current Crate Imports ────────────────────────────────────────────── //
 
-// ───── Submodules ───────────────────────────────────────────────────────── //
-
-// Modules in folders
-mod routes;
-
-// Top-level modules
-pub mod configuration;
-pub mod connection_pool;
-pub mod domain;
-pub mod email_client;
-pub mod startup;
+use super::subscriber_email::SubscriberEmail;
+use super::subscriber_name::SubscriberName;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
+
+pub struct NewSubscriber {
+    pub email: SubscriberEmail,
+    pub name: SubscriberName,
+}

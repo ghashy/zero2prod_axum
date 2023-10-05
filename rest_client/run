@@ -1,0 +1,23 @@
+#!/usr/bin/env zsh
+
+echo "First request: \n\n"
+
+curl -vs -b cookie.txt \
+        -c cookie.txt \
+        -X POST \
+        -H 'Accept: application/json' \
+        -H 'Content-Type: application/json' \
+        -H 'X-Postmark-Server-Token: 2af416e2-6f24-4989-9375-bd4fcfc667d8' \
+        -d '{
+          "From": "sender@gmail.com",
+          "To": "obsidin.musiwork@gmail.com",
+          "Subject": "Postmark test",
+          "TextBody": "Hello dear Postmark user.",
+          "HtmlBody": "<html><body><strong>Hello</strong> dear Postmark user.</body></html>",
+          "MessageStream": "outbound"
+        }' \
+        "https://api.postmarkapp.com/email"
+
+echo "\n\nSecond request: \n\n"
+
+curl -vs -b cookie.txt -c cookie.txt 127.0.0.1:3000/api/tickets

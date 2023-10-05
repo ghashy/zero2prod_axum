@@ -13,6 +13,7 @@ use bb8_postgres::PostgresConnectionManager;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
 
+/// This is a pool with wrapped postgres_connection_manager, tls secured.
 pub type ConnectionPool = Pool<PostgresConnectionManager<MakeTlsConnector>>;
 
 /// Custom extractor that grabs a connection from the pool
@@ -32,10 +33,11 @@ where
     async fn from_request_parts(
         _parts: &mut Parts,
         state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    ) -> Result<DatabaseConnection, Self::Rejection> {
         let pool = ConnectionPool::from_ref(state);
+        // FIXME
         let connection = pool.get_owned().await.map_err(internal_error)?;
-        Ok(Self(connection))
+        Ok(DatabaseConnection(connection))
     }
 }
 

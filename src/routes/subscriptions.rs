@@ -8,6 +8,8 @@ use serde::Deserialize;
 // ───── Current Crate Imports ────────────────────────────────────────────── //
 
 use crate::connection_pool::ConnectionPool;
+use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
+use crate::startup::AppState;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
 
@@ -17,9 +19,28 @@ pub struct FormData {
     name: String,
 }
 
+impl TryFrom<&FormData> for NewSubscriber {
+    type Error = String;
+    fn try_from(form: &FormData) -> Result<Self, Self::Error> {
+        let name = match SubscriberName::parse(&form.name) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(e.to_string());
+            }
+        };
+        let email = match SubscriberEmail::parse(&form.email) {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(e.to_string());
+            }
+        };
+        Ok(NewSubscriber { email, name })
+    }
+}
+
 #[tracing::instrument(
     name = "Adding a new subscriber",
-    skip(form, pool),
+    skip_all,
     fields(
         request_id,
         subscriber_email = %form.email,
@@ -28,18 +49,28 @@ pub struct FormData {
     level = "info"
 )]
 pub async fn subscribe_handler(
-    State(pool): State<ConnectionPool>,
+    State(state): State<AppState>,
     form: Form<FormData>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let request_id = uuid::Uuid::new_v4();
     tracing::Span::current().record("request_id", request_id.to_string());
-    tracing::info!(
+
+    // Convert `&FormData` into a `NewSubscriber`.
+    let new_subscriber = match (&form.0).try_into() {
+        Ok(sub) => sub,
+        Err(e) => return Err((StatusCode::BAD_REQUEST, e)),
+    };
+
+    let pool = state.pool;
+
+    tracing::event!(
+        tracing::Level::INFO,
         "Adding '{}' '{}' as a new subscriber",
         form.email,
         form.name
     );
 
-    match insert_subscriber(form, pool, request_id).await {
+    match insert_subscriber_to_db(&new_subscriber, pool, request_id).await {
         Ok(_) => {
             tracing::info!("New subscriber details have been saved");
             return Ok(StatusCode::OK);
@@ -54,12 +85,9 @@ pub async fn subscribe_handler(
 /// Error can happen in both cases: when trying to get a connection to Postgres
 /// from the `pool` and when trying to `await` Postgres query, so return error
 /// type is `String`.
-#[tracing::instrument(
-    name = "Saving new subscriber details to the Database",
-    skip(pool, email, name)
-)]
-async fn insert_subscriber(
-    Form(FormData { email, name }): Form<FormData>,
+#[tracing::instrument(skip_all)]
+async fn insert_subscriber_to_db(
+    subscriber: &NewSubscriber,
     pool: ConnectionPool,
     id: uuid::Uuid,
 ) -> Result<(), String> {
@@ -72,7 +100,13 @@ async fn insert_subscriber(
             r#"INSERT INTO subscriptions(id, email, name, subscribed_at)
                        VALUES ($1, $2, $3, $4)
                     "#,
-            &[&id, &email, &name, &std::time::SystemTime::now()],
+            &[
+                // These types implements `ToSql` trait.
+                &id,
+                &subscriber.email.as_ref(),
+                &subscriber.name.as_ref(),
+                &std::time::SystemTime::now(),
+            ],
         )
         .await
         .map_err(|e| {

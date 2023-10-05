@@ -1,0 +1,15 @@
+# configuration.yaml
+app_port: 8000
+app_addr: "---"
+database:
+  host: "---"
+  port: 5432
+  username: "ghashy"
+  password: "ghashy"
+  database_name: "newsletter"
+ssl_crt_path: "assets/root.crt"
+email_client:
+  # Value retrieved from Postmark's API documentation.
+  base_url: "https://api.postmarkapp.com"
+  # Use the single sender email you authorised on Postmark.
+  sender_email: "something@gmail.com"

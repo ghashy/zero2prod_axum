@@ -1,8 +1,18 @@
 # configuration.yaml
-application_port: 8000
+app_port: 8000
+app_addr: "127.0.0.1"
 database:
   host: "127.0.0.1"
   port: 5432
   username: "ghashy"
   password: "ghashy"
   database_name: "newsletter"
+ssl_crt_path: "assets/root.crt"
+email_client:
+  base_url: "https://api.postmarkapp.com"
+  sender_email: "test@gmail.com"
+  # We are only setting the development value,
+  # we'll deal with the production token outside of version control
+  # (given that it's a sensitive secret!).
+  authorization_token: "my_token"
+  timeout: 10000
