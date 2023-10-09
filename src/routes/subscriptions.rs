@@ -15,27 +15,8 @@ use crate::startup::AppState;
 
 #[derive(Deserialize, Debug)]
 pub struct FormData {
-    email: String,
-    name: String,
-}
-
-impl TryFrom<&FormData> for NewSubscriber {
-    type Error = String;
-    fn try_from(form: &FormData) -> Result<Self, Self::Error> {
-        let name = match SubscriberName::parse(&form.name) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(e.to_string());
-            }
-        };
-        let email = match SubscriberEmail::parse(&form.email) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(e.to_string());
-            }
-        };
-        Ok(NewSubscriber { email, name })
-    }
+    pub email: String,
+    pub name: String,
 }
 
 #[tracing::instrument(
@@ -97,8 +78,8 @@ async fn insert_subscriber_to_db(
     })?;
     connection
         .query_opt(
-            r#"INSERT INTO subscriptions(id, email, name, subscribed_at)
-                       VALUES ($1, $2, $3, $4)
+            r#"INSERT INTO subscriptions(id, email, name, subscribed_at, status)
+                       VALUES ($1, $2, $3, $4, 'confirmed')
                     "#,
             &[
                 // These types implements `ToSql` trait.

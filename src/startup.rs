@@ -22,12 +22,16 @@ use crate::routes::subscribe_handler;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
 
+/// This is a central type of our codebase. `Application` type builds server
+/// for both production and testing purposes.
 pub struct Application {
     server: Server<AddrIncoming, IntoMakeService<Router>>,
     #[allow(unused)]
     port: u16,
 }
 
+/// Shareable type, we insert it to the main `Router` as state,
+/// at the launch stage.
 #[derive(Clone)]
 pub struct AppState {
     pub pool: ConnectionPool,
@@ -38,11 +42,11 @@ pub struct AppState {
 impl Application {
     /// Build a new server.
     ///
-    /// Returns `Server` - future which should be runned on executor.
-    /// This functions builds a new server with given configuration.
+    /// This functions builds a new `Application` with given configuration.
+    /// It also configures a pool of connections to the PostgreSQL database.
     pub async fn build(
         configuration: Settings,
-    ) -> Result<Self, std::io::Error> {
+    ) -> Result<Application, std::io::Error> {
         let postgres_connection =
             get_postgres_connection_pool(&configuration).await;
 
@@ -73,11 +77,11 @@ impl Application {
 
         Ok(Self { server, port })
     }
+    /// Get port on which current application is ran.
     pub fn port(&self) -> u16 {
         self.server.local_addr().port()
     }
-    // A more expressive name that makes it clear that
-    // this function only returns when the application is stopped.
+    /// This function only returns when the application is stopped.
     pub async fn run_until_stopped(self) -> Result<(), hyper::Error> {
         self.server.await
     }
@@ -85,6 +89,7 @@ impl Application {
 
 // Private
 impl Application {
+    /// Configure `Server`.
     fn run(
         listener: TcpListener,
         pool: ConnectionPool,

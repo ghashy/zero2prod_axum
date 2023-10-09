@@ -12,7 +12,7 @@ use crate::helpers::{spawn_app_locally, TestApp};
 
 #[tokio::test]
 async fn health_check_test() {
-    let config = Settings::load_test_configuration();
+    let config = Settings::load_configuration().unwrap();
 
     let TestApp { address, .. } = spawn_app_locally(config).await;
 

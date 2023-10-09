@@ -19,6 +19,21 @@ pub struct TestApp {
     pub pool: ConnectionPool,
 }
 
+impl TestApp {
+    pub async fn post_subscriptions(
+        &self,
+        body: &'static str,
+    ) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/subscriptions", &self.address))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+}
+
 pub async fn spawn_pool(
     connection_string: Secret<String>,
     connector: MakeTlsConnector,

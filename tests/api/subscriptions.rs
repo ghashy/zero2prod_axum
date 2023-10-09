@@ -1,25 +1,17 @@
 // ───── Current Crate Imports ────────────────────────────────────────────── //
 
-use crate::helpers::{spawn_app_locally, TestApp};
+use crate::helpers::spawn_app_locally;
 use zero2prod_axum::configuration::Settings;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
-    let config = Settings::load_test_configuration();
-    let TestApp { address, pool } = spawn_app_locally(config).await;
-
-    let client = reqwest::Client::new();
+    let config = Settings::load_configuration().unwrap();
+    let test_app = spawn_app_locally(config).await;
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    let response = client
-        .post(&format!("{}/subscriptions", &address))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    let response = test_app.post_subscriptions(body).await;
 
     assert_eq!(
         200,
@@ -27,7 +19,8 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         "The API failed with correct post request"
     );
 
-    let saved = pool
+    let saved = test_app
+        .pool
         .get()
         .await
         .unwrap()
@@ -45,7 +38,8 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert_eq!(saved[0].get::<&str, &str>("name"), "le guin");
 
     // Remove test data from database.
-    let messages = pool
+    let messages = test_app
+        .pool
         .get()
         .await
         .unwrap()
@@ -67,10 +61,8 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
-    let config = Settings::load_test_configuration();
-    let TestApp { address, pool } = spawn_app_locally(config).await;
-
-    let client = reqwest::Client::new();
+    let config = Settings::load_configuration().unwrap();
+    let test_app = spawn_app_locally(config).await;
 
     let test_cases = vec![
         ("name=&email=ursula_le_guin%40gmail.com", "emtpy name"),
@@ -79,13 +71,7 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
     ];
 
     for (body, description) in test_cases {
-        let response = client
-            .post(&format!("{}/subscriptions", address))
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(body)
-            .send()
-            .await
-            .expect("Failed to execute request");
+        let response = test_app.post_subscriptions(body).await;
 
         assert_eq!(
             400,
@@ -98,11 +84,9 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
 
 #[tokio::test]
 async fn subscribe_returns_a_422_when_data_is_missing() {
-    let config = Settings::load_test_configuration();
+    let config = Settings::load_configuration().unwrap();
 
-    let TestApp { address, pool } = spawn_app_locally(config).await;
-
-    let client = reqwest::Client::new();
+    let test_app = spawn_app_locally(config).await;
 
     let test_cases = vec![
         ("name=le%guin", "missing the email"),
@@ -111,13 +95,7 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
     ];
 
     for (invalid_body, error_message) in test_cases {
-        let response = client
-            .post(&format!("{}/subscriptions", &address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(invalid_body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
+        let response = test_app.post_subscriptions(invalid_body).await;
 
         assert_eq!(
             422,

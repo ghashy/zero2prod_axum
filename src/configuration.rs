@@ -26,30 +26,6 @@ impl Settings {
         // our `Settings` type.
         settings.try_deserialize()
     }
-    pub fn load_test_configuration() -> Settings {
-        // let database_settings = DatabaseSettings {
-        //     username: String::from("ghashy"),
-        //     password: Secret::new(String::from("ghashy")),
-        //     port: 5432,
-        //     host: String::from("127.0.0.1"),
-        //     database_name: String::from("newsletter"),
-        // };
-        // let email_client = EmailClientSettings {
-        //     base_url: String::from("http://127.0.0.1"),
-        //     sender_email: String::from("sender@gmail.com"),
-        //     authorization_token: Secret::new(String::from("my_token")),
-        //     timeout: 10000,
-        // };
-        // Settings {
-        //     database: database_settings,
-        //     // Random port
-        //     app_port: 0,
-        //     app_addr: String::from("127.0.0.1"),
-        //     ssl_crt_path: String::from("assets/root.crt"),
-        //     email_client,
-        // }
-        Settings::load_configuration().unwrap()
-    }
 }
 
 #[derive(Deserialize, Debug)]
