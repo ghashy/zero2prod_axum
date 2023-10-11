@@ -4,6 +4,7 @@ use bb8_postgres::PostgresConnectionManager;
 use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use postgres_openssl::MakeTlsConnector;
 use secrecy::{ExposeSecret, Secret};
+use wiremock::MockServer;
 
 // ───── Current Crate Imports ────────────────────────────────────────────── //
 
@@ -17,6 +18,7 @@ use zero2prod_axum::{
 pub struct TestApp {
     pub address: String,
     pub pool: ConnectionPool,
+    pub email_server: MockServer,
 }
 
 impl TestApp {
@@ -61,6 +63,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
         address,
         // This pool is separate from our app's pool
         pool: spawn_pool(connection_string, get_connector()).await,
+        email_server: MockServer::start().await,
     }
 }
 

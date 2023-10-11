@@ -1,6 +1,8 @@
 // ───── Current Crate Imports ────────────────────────────────────────────── //
 
 use crate::helpers::spawn_app_locally;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, ResponseTemplate};
 use zero2prod_axum::configuration::Settings;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
@@ -104,4 +106,26 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
             error_message
         );
     }
+}
+
+#[tokio::test]
+async fn subscribe_sends_a_confirmation_email_for_valid_data() {
+    let config = Settings::load_configuration().unwrap();
+
+    // Arrange
+    let app = spawn_app_locally(config).await;
+    let body = "name=le%guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    // Act
+    app.post_subscriptions(body.into()).await;
+
+    // Assert
+    // Mock asserts on drop
 }
