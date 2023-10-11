@@ -11,7 +11,6 @@ pub struct Settings {
     pub database: DatabaseSettings,
     pub app_port: u16,
     pub app_addr: String,
-    pub ssl_crt_path: String,
     pub email_client: EmailClientSettings,
 }
 

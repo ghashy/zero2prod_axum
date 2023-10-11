@@ -15,6 +15,7 @@ use secrecy::ExposeSecret;
 use crate::configuration::Settings;
 use crate::connection_pool::ConnectionPool;
 use crate::email_client::EmailClient;
+use crate::routes::get_hello;
 use crate::routes::health_check;
 use crate::routes::subscribe_handler;
 
@@ -98,6 +99,7 @@ impl Application {
         let app_state = AppState { pool, email_client };
         let app = Router::new()
             .route("/health_check", routing::get(health_check))
+            .route("/hello", routing::get(get_hello))
             .route("/subscriptions", routing::post(subscribe_handler))
             .with_state(app_state);
 

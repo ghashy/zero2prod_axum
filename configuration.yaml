@@ -7,7 +7,6 @@ database:
   username: "ghashy"
   password: "ghashy"
   database_name: "newsletter"
-ssl_crt_path: "assets/root.crt"
 email_client:
   base_url: "https://api.postmarkapp.com"
   sender_email: "test@gmail.com"
