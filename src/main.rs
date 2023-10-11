@@ -12,8 +12,7 @@ async fn main() {
         .init();
 
     // Panic if we can't read configuration
-    let config =
-        Settings::load_configuration().expect("Failed to read configuration.");
+    let config = Settings::load_configuration().expect("Failed to read configuration.");
 
     if let Err(e) = Application::build(config)
         .await

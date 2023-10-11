@@ -8,8 +8,6 @@ use axum::Server;
 use hyper::server::conn::AddrIncoming;
 
 use bb8_postgres::PostgresConnectionManager;
-use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
-use postgres_openssl::MakeTlsConnector;
 use secrecy::ExposeSecret;
 
 // ───── Current Crate Imports ────────────────────────────────────────────── //
@@ -113,14 +111,9 @@ impl Application {
 async fn get_postgres_connection_pool(
     configuration: &Settings,
 ) -> ConnectionPool {
-    let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
-    builder.set_ca_file(&configuration.ssl_crt_path).unwrap();
-    builder.set_verify(SslVerifyMode::NONE);
-    let connector = MakeTlsConnector::new(builder.build());
-
     let manager = PostgresConnectionManager::new_from_stringlike(
         configuration.database.connection_string().expose_secret(),
-        connector,
+        tokio_postgres::NoTls,
     )
     .unwrap();
     bb8::Pool::builder().build(manager).await.unwrap()

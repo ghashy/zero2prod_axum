@@ -5,21 +5,20 @@ use axum::extract::FromRequestParts;
 use hyper::http::request::Parts;
 use hyper::StatusCode;
 
-use postgres_openssl::MakeTlsConnector;
-
 use bb8::Pool;
 use bb8::PooledConnection;
 use bb8_postgres::PostgresConnectionManager;
+use tokio_postgres::NoTls;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
 
 /// This is a pool with wrapped postgres_connection_manager, tls secured.
-pub type ConnectionPool = Pool<PostgresConnectionManager<MakeTlsConnector>>;
+pub type ConnectionPool = Pool<PostgresConnectionManager<NoTls>>;
 
 /// Custom extractor that grabs a connection from the pool
 /// which setup is appropriate depends on your application.
 pub struct DatabaseConnection(
-    pub PooledConnection<'static, PostgresConnectionManager<MakeTlsConnector>>,
+    pub PooledConnection<'static, PostgresConnectionManager<NoTls>>,
 );
 
 #[async_trait]
