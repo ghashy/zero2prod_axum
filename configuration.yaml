@@ -5,6 +5,8 @@ app_addr: "127.0.0.1"
 database:
   host: "127.0.0.1"
   port: 5432
+  # If non empty, use unix socket file. Shold be directory with .s.PGSQL.5432 file.
+  socket_file: "/tmp"
   username: "ghashy"
   password: "ghashy"
   database_name: "newsletter"

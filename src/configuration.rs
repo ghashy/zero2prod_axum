@@ -35,18 +35,22 @@ pub struct DatabaseSettings {
     pub password: Secret<String>,
     pub port: u16,
     pub host: String,
+    pub socket_file: String,
     pub database_name: String,
 }
 
 impl DatabaseSettings {
+    /// `tokio-postgres` will try to connect to unix first, and then to tcp.
     pub fn connection_string(&self) -> secrecy::Secret<String> {
         secrecy::Secret::new(format!(
-            "postgres://{}:{}@{}:{}/{}",
+            "user={} password={} dbname={} host={},{} port={} application_name={}",
             self.username,
             self.password.expose_secret(),
+            self.database_name,
+            self.socket_file,
             self.host,
             self.port,
-            self.database_name
+            "zero2prod"
         ))
     }
 }
