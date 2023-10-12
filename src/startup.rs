@@ -21,6 +21,11 @@ use crate::routes::subscribe_handler;
 
 // ───── Body ─────────────────────────────────────────────────────────────── //
 
+pub enum ServerType<T> {
+    UnixSocket(Server<T, IntoMakeService<Router>>),
+    TcpSocket,
+}
+
 /// This is a central type of our codebase. `Application` type builds server
 /// for both production and testing purposes.
 pub struct Application {
@@ -70,7 +75,12 @@ impl Application {
             format!("{}:{}", configuration.app_addr, configuration.app_port);
         let listener = TcpListener::bind(address)?;
 
-        let server = Self::run(listener, postgres_connection, email_client);
+        let server = Self::run(
+            &configuration.socket_dir,
+            listener,
+            postgres_connection,
+            email_client,
+        );
 
         let port = server.local_addr().port();
 
@@ -90,6 +100,7 @@ impl Application {
 impl Application {
     /// Configure `Server`.
     fn run(
+        unix_socket_path: &str,
         listener: TcpListener,
         pool: ConnectionPool,
         email_client: EmailClient,
@@ -103,9 +114,17 @@ impl Application {
             .route("/subscriptions", routing::post(subscribe_handler))
             .with_state(app_state);
 
-        axum::Server::from_tcp(listener)
-            .expect("Cant create server from tcp listener.")
-            .serve(app.into_make_service())
+        if unix_socket_path.is_empty() {
+            axum::Server::from_tcp(listener)
+                .expect("Cant create server from tcp listener.")
+                .serve(app.into_make_service())
+        } else {
+            use hyperlocal::UnixServerExt;
+
+            axum::Server::bind_unix(unix_socket_path)
+                .expect("Cant create server from tcp listener.")
+                .serve(app.into_make_service())
+        }
     }
 }
 

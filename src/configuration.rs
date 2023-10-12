@@ -11,6 +11,8 @@ pub struct Settings {
     pub database: DatabaseSettings,
     pub app_port: u16,
     pub app_addr: String,
+    /// If this parameter set to non-zero length String, use unix sockets.
+    pub socket_dir: String,
     pub email_client: EmailClientSettings,
 }
 
