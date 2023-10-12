@@ -1,8 +1,6 @@
 //! This is a module with common initialization functions.
 
 use bb8_postgres::PostgresConnectionManager;
-use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
-use postgres_openssl::MakeTlsConnector;
 use secrecy::{ExposeSecret, Secret};
 use wiremock::MockServer;
 
@@ -36,13 +34,10 @@ impl TestApp {
     }
 }
 
-pub async fn spawn_pool(
-    connection_string: Secret<String>,
-    connector: MakeTlsConnector,
-) -> ConnectionPool {
+pub async fn spawn_pool(connection_string: Secret<String>) -> ConnectionPool {
     let manager = PostgresConnectionManager::new_from_stringlike(
         connection_string.expose_secret(),
-        connector,
+        tokio_postgres::NoTls,
     )
     .unwrap();
     bb8::Pool::builder().build(manager).await.unwrap()
@@ -55,21 +50,20 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     let application = Application::build(config)
         .await
         .expect("Failed to build application");
-    let address = format!("http://127.0.0.1:{}", application.port());
+
+    let zero2prod_axum::startup::PortType::Tcp(port) = application.port()
+    else {
+        panic!();
+    };
+
+    let address = format!("http://127.0.0.1:{}", port);
     // Very important step
     let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
         address,
         // This pool is separate from our app's pool
-        pool: spawn_pool(connection_string, get_connector()).await,
+        pool: spawn_pool(connection_string).await,
         email_server: MockServer::start().await,
     }
-}
-
-pub fn get_connector() -> MakeTlsConnector {
-    let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
-    builder.set_ca_file("assets/root.crt").unwrap();
-    builder.set_verify(SslVerifyMode::NONE);
-    MakeTlsConnector::new(builder.build())
 }
