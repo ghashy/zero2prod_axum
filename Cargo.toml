@@ -14,7 +14,7 @@ path = "src/main.rs"
 [dependencies]
 axum = "0.6.20"
 hyper = "0.14.27"
-tokio = { version = "1.32.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.32.0", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-postgres = { version = "0.7.10", features = ["with-uuid-1"] }
 hyperlocal = "0.8"
 # postgres-native-tls = "0.5.0"

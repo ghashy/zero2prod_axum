@@ -1,6 +1,7 @@
 # configuration.yaml
 app_port: 8000
-socket_dir: ""
+# This directory should be created before running server
+socket_dir: "/Users/ghashy/Desktop/sockets/"
 app_addr: "127.0.0.1"
 database:
   host: "127.0.0.1"
@@ -13,7 +14,7 @@ database:
 email_client:
   base_url: "https://api.postmarkapp.com"
   sender_email: "test@gmail.com"
-  # We are only setting the development value,
+  # IMPORTANT: We are only setting the development value,
   # we'll deal with the production token outside of version control
   # (given that it's a sensitive secret!).
   authorization_token: "my_token"

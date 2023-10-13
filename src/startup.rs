@@ -1,4 +1,5 @@
 use std::net::TcpListener;
+use std::path::PathBuf;
 
 use axum::routing;
 use axum::routing::IntoMakeService;
@@ -31,7 +32,7 @@ pub enum ServerType {
 #[derive(Clone)]
 pub enum PortType {
     Tcp(u16),
-    Unix(String),
+    Unix(PathBuf),
 }
 
 /// This is a central type of our codebase. `Application` type builds server
@@ -40,7 +41,7 @@ pub struct Application {
     server: ServerType,
     #[allow(unused)]
     port: PortType,
-    unix_socket_file: Option<String>,
+    unix_socket_file: Option<PathBuf>,
 }
 
 /// Shareable type, we insert it to the main `Router` as state,
@@ -96,7 +97,7 @@ impl Application {
                 PortType::Tcp(server.local_addr().port())
             }
             ServerType::UnixSocket(_) => {
-                PortType::Unix(get_socket_name(&configuration.socket_dir))
+                PortType::Unix(get_socket_path(&configuration.socket_dir))
             }
         };
 
@@ -108,33 +109,32 @@ impl Application {
     }
     /// Get port on which current application is ran.
     pub fn port(&self) -> PortType {
-        // match &self.server {
-        //     ServerType::TcpSocket(server) => {
-        //         PortType::Tcp(server.local_addr().port())
-        //     }
-        //     _ => panic!(),
-        // }
         self.port.clone()
     }
     /// This function only returns when the application is stopped.
     pub async fn run_until_stopped(self) -> Result<(), hyper::Error> {
         match self.server {
-            ServerType::TcpSocket(server) => server.await,
-            ServerType::UnixSocket(server) => {
-                let (tx, rx) = tokio::sync::oneshot::channel();
+            ServerType::TcpSocket(server) => {
                 let graceful = server.with_graceful_shutdown(async move {
-                    // println!(
-                    //     "Was serving on unix socket: {}",
-                    //     self.unix_socket_file.unwrap()
-                    // );
-                    rx.await.ok();
-                    tracing::info!(
-                        "Was serving on unix socket: {}",
-                        self.unix_socket_file.unwrap()
-                    );
+                    let _ = tokio::signal::ctrl_c().await;
+                    tracing::info!("Was serving on tcp socket!");
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 });
                 graceful.await?;
-                let _ = tx.send(());
+                Ok(())
+            }
+            ServerType::UnixSocket(server) => {
+                // When future in this function is resolved, application
+                // shutdowns. Also we could use tx/rx to shutdown from the
+                // inside.
+                let graceful = server.with_graceful_shutdown(async move {
+                    let _ = tokio::signal::ctrl_c().await;
+                    let path = self.unix_socket_file.unwrap();
+                    delete_socket_file(path);
+                    tracing::info!("Shutdown!");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                });
+                graceful.await?;
                 Ok(())
             }
         }
@@ -149,7 +149,7 @@ impl Application {
         listener: TcpListener,
         pool: ConnectionPool,
         email_client: EmailClient,
-    ) -> (ServerType, Option<String>) {
+    ) -> (ServerType, Option<PathBuf>) {
         // We do not wrap pool into arc because internally it alreaday has an
         // `Arc`, and copying is cheap.
         let app_state = AppState { pool, email_client };
@@ -180,8 +180,11 @@ impl Application {
                 None,
             )
         } else {
-            tracing::info!("Running on unix socket!");
-            let unix_socket_file = get_socket_name(unix_socket_path);
+            let unix_socket_file = get_socket_path(unix_socket_path);
+            tracing::info!(
+                "Running on unix socket: {}",
+                unix_socket_file.display()
+            );
             (
                 ServerType::UnixSocket(
                     axum::Server::bind_unix(&unix_socket_file)
@@ -206,7 +209,7 @@ async fn get_postgres_connection_pool(
     bb8::Pool::builder().build(manager).await.unwrap()
 }
 
-fn get_socket_name(unix_socket_path: &str) -> String {
+fn get_socket_path(unix_socket_path: &str) -> PathBuf {
     let sock_indices = std::fs::read_dir(unix_socket_path)
         .expect("Failed to read unix sockets directory")
         .flatten()
@@ -221,7 +224,21 @@ fn get_socket_name(unix_socket_path: &str) -> String {
         .flatten()
         .collect::<Vec<_>>();
     let min = find_min_not_occupied(sock_indices);
-    format!("sock{}", min)
+    PathBuf::from(format!("{}/sock{}", unix_socket_path, min))
+        .components()
+        .collect::<PathBuf>()
+}
+
+fn delete_socket_file(path: PathBuf) {
+    tracing::info!("Was serving on unix socket: {}", path.display());
+    match std::fs::remove_file(path) {
+        Ok(_) => {
+            tracing::info!("Socket file was successfully deleted!")
+        }
+        Err(e) => {
+            tracing::error!("Failed to delete socket file: {}", e)
+        }
+    }
 }
 
 fn find_min_not_occupied(numbers: Vec<u16>) -> u16 {

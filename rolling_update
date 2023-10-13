@@ -12,22 +12,27 @@ binary="target/x86_64-unknown-linux-gnu/release/zero2prod"
 remote_user="ghashy"
 remote_host="151.248.121.67"
 remote_port="39000"
-remote_dir="~"
+remote_dir="~/apps/zero2prod"
 
 echo -e "\nConnecting to debian.local..."
 ssh -i '~/.ssh/id_rsa' "$local_linux_user@$local_linux_host" \
     "echo -e \"${GREEN}Connected!\n${NC}\" &&
      cd $local_project_path &&
-     git fetch &&
-     echo End"
-# cargo build --release --target x86_64-unknown-linux-gnu
+     git pull &&
+     ~/.cargo/bin/cargo build --release --target x86_64-unknown-linux-gnu &&
+     echo -e \"\n${GREEN}Copying to the target server...${NC}\" &&
+     scp -P $remote_port \"$binary\" \"$remote_user@$remote_host:$remote_dir\" &&
+     echo -e \"${GREEN}Binary copied to target server!\n${NC}\"
+    "
+
+ssh -p "$remote_port" -i '~/.ssh/id_rsa' "$remote_user@$remote_host" \
+    "cd $remote_dir"
 
 # Enable the interpretation of backslash escapes in the echoed string.
-# echo -e "${GREEN}Finished!${NC}"
+echo -e "${GREEN}Finished!${NC}"
 
 
 # Copy the file using scp
-# scp -P $remote_port "$binary" "$remote_user@$remote_host:$remote_dir"
 
 # Check if the file was copied successfully
 # if [ $? -eq 0 ]; then
