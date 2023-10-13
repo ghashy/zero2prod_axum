@@ -37,10 +37,10 @@ pub enum PortType {
 /// This is a central type of our codebase. `Application` type builds server
 /// for both production and testing purposes.
 pub struct Application {
-    // server: Server<AddrIncoming, IntoMakeService<Router>>,
     server: ServerType,
     #[allow(unused)]
     port: PortType,
+    unix_socket_file: Option<String>,
 }
 
 /// Shareable type, we insert it to the main `Router` as state,
@@ -84,7 +84,7 @@ impl Application {
             format!("{}:{}", configuration.app_addr, configuration.app_port);
         let listener = TcpListener::bind(address)?;
 
-        let server = Self::build_server(
+        let (server, unix_socket_file) = Self::build_server(
             &configuration.socket_dir,
             listener,
             postgres_connection,
@@ -100,7 +100,11 @@ impl Application {
             }
         };
 
-        Ok(Self { server, port })
+        Ok(Self {
+            server,
+            port,
+            unix_socket_file,
+        })
     }
     /// Get port on which current application is ran.
     pub fn port(&self) -> PortType {
@@ -116,7 +120,20 @@ impl Application {
     pub async fn run_until_stopped(self) -> Result<(), hyper::Error> {
         match self.server {
             ServerType::TcpSocket(server) => server.await,
-            ServerType::UnixSocket(server) => server.await,
+            ServerType::UnixSocket(server) => {
+                let graceful = server.with_graceful_shutdown(async move {
+                    // println!(
+                    //     "Was serving on unix socket: {}",
+                    //     self.unix_socket_file.unwrap()
+                    // );
+                    tracing::info!(
+                        "Was serving on unix socket: {}",
+                        self.unix_socket_file.unwrap()
+                    );
+                });
+                graceful.await?;
+                Ok(())
+            }
         }
     }
 }
@@ -129,7 +146,7 @@ impl Application {
         listener: TcpListener,
         pool: ConnectionPool,
         email_client: EmailClient,
-    ) -> ServerType {
+    ) -> (ServerType, Option<String>) {
         // We do not wrap pool into arc because internally it alreaday has an
         // `Arc`, and copying is cheap.
         let app_state = AppState { pool, email_client };
@@ -151,17 +168,24 @@ impl Application {
 
         if unix_socket_path.is_empty() {
             tracing::info!("Running on tcp socket!");
-            ServerType::TcpSocket(
-                axum::Server::from_tcp(listener)
-                    .expect("Cant create server from tcp listener.")
-                    .serve(app.into_make_service()),
+            (
+                ServerType::TcpSocket(
+                    axum::Server::from_tcp(listener)
+                        .expect("Cant create server from tcp listener.")
+                        .serve(app.into_make_service()),
+                ),
+                None,
             )
         } else {
             tracing::info!("Running on unix socket!");
-            ServerType::UnixSocket(
-                axum::Server::bind_unix(get_socket_name(unix_socket_path))
-                    .expect("Cant create server from unix socket.")
-                    .serve(app.into_make_service()),
+            let unix_socket_file = get_socket_name(unix_socket_path);
+            (
+                ServerType::UnixSocket(
+                    axum::Server::bind_unix(&unix_socket_file)
+                        .expect("Cant create server from unix socket.")
+                        .serve(app.into_make_service()),
+                ),
+                Some(unix_socket_file),
             )
         }
     }
