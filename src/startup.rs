@@ -133,11 +133,21 @@ impl Application {
         // We do not wrap pool into arc because internally it alreaday has an
         // `Arc`, and copying is cheap.
         let app_state = AppState { pool, email_client };
-        let app = Router::new()
-            .route("/health_check", routing::get(health_check))
-            .route("/hello", routing::get(get_hello))
-            .route("/subscriptions", routing::post(subscribe_handler))
-            .with_state(app_state);
+        let app =
+            Router::new()
+                .route("/health_check", routing::get(health_check))
+                .route("/hello", routing::get(get_hello))
+                .route("/subscriptions", routing::post(subscribe_handler))
+                // DEBUG:
+                .fallback(routing::get(
+                    |uri: axum::http::Uri,
+                     orig_uri: axum::extract::OriginalUri| async move {
+                        let uri = uri.path();
+                        let orig_uri = orig_uri.path();
+                        format!("uri: {}\norig_uri: {}", uri, orig_uri)
+                    },
+                ))
+                .with_state(app_state);
 
         if unix_socket_path.is_empty() {
             tracing::info!("Running on tcp socket!");
