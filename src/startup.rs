@@ -159,8 +159,8 @@ impl Application {
         } else {
             tracing::info!("Running on unix socket!");
             ServerType::UnixSocket(
-                axum::Server::bind_unix(unix_socket_path)
-                    .expect("Cant create server from tcp listener.")
+                axum::Server::bind_unix(get_socket_name(unix_socket_path))
+                    .expect("Cant create server from unix socket.")
                     .serve(app.into_make_service()),
             )
         }
