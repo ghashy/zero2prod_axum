@@ -3,25 +3,35 @@
 # Variables
 GREEN='\033[0;32m'
 NC='\033[0m'
+
+local_linux_user="ghashy"
+local_linux_host="192.168.64.17"
+local_project_path="projects/zero2prod_axum/"
+
 binary="target/x86_64-unknown-linux-gnu/release/zero2prod"
 remote_user="ghashy"
 remote_host="151.248.121.67"
 remote_port="39000"
 remote_dir="~"
 
-echo "Building..."
-cargo build --release --target x86_64-unknown-linux-gnu
+echo -e "\nConnecting to debian.local..."
+ssh -i '~/.ssh/id_rsa' "$local_linux_user@$local_linux_host" \
+    "echo -e \"${GREEN}Connected!\n${NC}\" &&
+     cd $local_project_path &&
+     git fetch &&
+     echo End"
+# cargo build --release --target x86_64-unknown-linux-gnu
 
 # Enable the interpretation of backslash escapes in the echoed string.
-echo -e "${GREEN}Finished!${NC}"
+# echo -e "${GREEN}Finished!${NC}"
 
 
 # Copy the file using scp
-scp -P $remote_port "$binary" "$remote_user@$remote_host:$remote_dir"
+# scp -P $remote_port "$binary" "$remote_user@$remote_host:$remote_dir"
 
 # Check if the file was copied successfully
-if [ $? -eq 0 ]; then
-    echo "File uploaded successfully."
-else
-    echo "Error uploading file."
-fi
+# if [ $? -eq 0 ]; then
+    # echo "File uploaded successfully."
+# else
+    # echo "Error uploading file."
+# fi
