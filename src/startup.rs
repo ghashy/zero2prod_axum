@@ -121,17 +121,20 @@ impl Application {
         match self.server {
             ServerType::TcpSocket(server) => server.await,
             ServerType::UnixSocket(server) => {
+                let (tx, rx) = tokio::sync::oneshot::channel();
                 let graceful = server.with_graceful_shutdown(async move {
                     // println!(
                     //     "Was serving on unix socket: {}",
                     //     self.unix_socket_file.unwrap()
                     // );
+                    rx.await.ok();
                     tracing::info!(
                         "Was serving on unix socket: {}",
                         self.unix_socket_file.unwrap()
                     );
                 });
                 graceful.await?;
+                let _ = tx.send(());
                 Ok(())
             }
         }
