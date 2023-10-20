@@ -1,10 +1,7 @@
+use secrecy::{ExposeSecret, Secret};
 use serde::Deserialize;
 
-use secrecy::{ExposeSecret, Secret};
-
 use crate::domain::SubscriberEmail;
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 #[derive(Deserialize, Debug)]
 pub struct Settings {
@@ -12,7 +9,7 @@ pub struct Settings {
     pub app_port: u16,
     pub app_addr: String,
     /// If this parameter set to non-zero length String, use unix sockets.
-    pub socket_dir: String,
+    pub unix_socket: String,
     pub email_client: EmailClientSettings,
 }
 

@@ -47,6 +47,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     let connection_string = config.database.connection_string();
     // We should randomize app port
     config.app_port = 0;
+    config.unix_socket = String::new();
     let application = Application::build(config)
         .await
         .expect("Failed to build application");

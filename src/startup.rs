@@ -86,7 +86,7 @@ impl Application {
         let listener = TcpListener::bind(address)?;
 
         let (server, unix_socket_file) = Self::build_server(
-            &configuration.socket_dir,
+            &configuration.unix_socket,
             listener,
             postgres_connection,
             email_client,
@@ -97,7 +97,7 @@ impl Application {
                 PortType::Tcp(server.local_addr().port())
             }
             ServerType::UnixSocket(_) => {
-                PortType::Unix(get_socket_path(&configuration.socket_dir))
+                PortType::Unix(unix_socket_file.clone().unwrap())
             }
         };
 
@@ -145,7 +145,7 @@ impl Application {
 impl Application {
     /// Configure `Server`.
     fn build_server(
-        unix_socket_path: &str,
+        unix_socket: &str,
         listener: TcpListener,
         pool: ConnectionPool,
         email_client: EmailClient,
@@ -169,7 +169,7 @@ impl Application {
                 ))
                 .with_state(app_state);
 
-        if unix_socket_path.is_empty() {
+        if unix_socket.is_empty() {
             tracing::info!("Running on tcp socket!");
             (
                 ServerType::TcpSocket(
@@ -180,18 +180,16 @@ impl Application {
                 None,
             )
         } else {
-            let unix_socket_file = get_socket_path(unix_socket_path);
-            tracing::info!(
-                "Running on unix socket: {}",
-                unix_socket_file.display()
-            );
+            tracing::info!("Running on unix socket: {}", unix_socket);
             (
+                // FIXME: set socket file permissions from rust code
                 ServerType::UnixSocket(
-                    axum::Server::bind_unix(&unix_socket_file)
+                    axum::Server::bind_unix(unix_socket)
                         .expect("Cant create server from unix socket.")
                         .serve(app.into_make_service()),
                 ),
-                Some(unix_socket_file),
+                // We need to store path to socket, for clean up it on shutdown
+                Some(PathBuf::from(unix_socket)),
             )
         }
     }
@@ -209,26 +207,6 @@ async fn get_postgres_connection_pool(
     bb8::Pool::builder().build(manager).await.unwrap()
 }
 
-fn get_socket_path(unix_socket_path: &str) -> PathBuf {
-    let sock_indices = std::fs::read_dir(unix_socket_path)
-        .expect("Failed to read unix sockets directory")
-        .flatten()
-        .map(|f| f.file_name().into_string())
-        .flatten()
-        .map(|f| {
-            f.chars()
-                .filter(|c| c.is_digit(10))
-                .collect::<String>()
-                .parse::<u16>()
-        })
-        .flatten()
-        .collect::<Vec<_>>();
-    let min = find_min_not_occupied(sock_indices);
-    PathBuf::from(format!("{}/sock{}", unix_socket_path, min))
-        .components()
-        .collect::<PathBuf>()
-}
-
 fn delete_socket_file(path: PathBuf) {
     tracing::info!("Was serving on unix socket: {}", path.display());
     match std::fs::remove_file(path) {
@@ -239,19 +217,4 @@ fn delete_socket_file(path: PathBuf) {
             tracing::error!("Failed to delete socket file: {}", e)
         }
     }
-}
-
-fn find_min_not_occupied(numbers: Vec<u16>) -> u16 {
-    let mut sorted_numbers = numbers.clone();
-    sorted_numbers.sort();
-
-    let mut min_not_occupied: u16 = 1;
-    for &num in &sorted_numbers {
-        if num > min_not_occupied {
-            break;
-        }
-        min_not_occupied += 1;
-    }
-
-    min_not_occupied
 }

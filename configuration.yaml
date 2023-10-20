@@ -1,8 +1,8 @@
 # configuration.yaml
+# App port, addr, unix socket dir
 app_port: 8000
-# This directory should be created before running server
-socket_dir: "/Users/ghashy/Desktop/sockets/"
 app_addr: "127.0.0.1"
+unix_socket: "/Users/ghashy/Desktop/sockets/sock1.sock"
 database:
   host: "127.0.0.1"
   port: 5432
