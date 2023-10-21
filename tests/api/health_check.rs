@@ -4,11 +4,7 @@
 
 use zero2prod_axum::configuration::Settings;
 
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use crate::helpers::{spawn_app_locally, TestApp};
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 #[tokio::test]
 async fn health_check_test() {

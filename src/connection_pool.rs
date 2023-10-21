@@ -10,8 +10,6 @@ use bb8::PooledConnection;
 use bb8_postgres::PostgresConnectionManager;
 use tokio_postgres::NoTls;
 
-// ───── Body ─────────────────────────────────────────────────────────────── //
-
 /// This is a pool with wrapped postgres_connection_manager, tls secured.
 pub type ConnectionPool = Pool<PostgresConnectionManager<NoTls>>;
 

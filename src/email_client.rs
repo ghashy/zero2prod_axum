@@ -4,11 +4,7 @@ use reqwest::Client;
 use secrecy::{ExposeSecret, Secret};
 use serde::{Deserialize, Serialize};
 
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use crate::domain::SubscriberEmail;
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 /// This type handles the sending of emails.
 /// Internally, it includes a connection pool.

@@ -1,5 +1,3 @@
-// ───── Body ─────────────────────────────────────────────────────────────── //
-
 /// This type guarantees correctness of `subscriber's` email address.
 #[derive(Clone)]
 pub struct SubscriberEmail(String);
@@ -19,8 +17,6 @@ impl AsRef<str> for SubscriberEmail {
         &self.0
     }
 }
-
-// ───── Unit tests ───────────────────────────────────────────────────────── //
 
 #[cfg(test)]
 mod tests {

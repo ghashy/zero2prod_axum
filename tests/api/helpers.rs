@@ -4,14 +4,10 @@ use bb8_postgres::PostgresConnectionManager;
 use secrecy::{ExposeSecret, Secret};
 use wiremock::MockServer;
 
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use zero2prod_axum::{
     configuration::Settings, connection_pool::ConnectionPool,
     startup::Application,
 };
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 pub struct TestApp {
     pub address: String,

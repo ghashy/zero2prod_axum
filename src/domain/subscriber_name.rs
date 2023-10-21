@@ -1,5 +1,3 @@
-// ───── Body ─────────────────────────────────────────────────────────────── //
-
 /// This type guarantees us that `SubscriberName` is properly formed.
 pub struct SubscriberName(String);
 

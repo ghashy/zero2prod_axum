@@ -1,13 +1,9 @@
 use serde::Deserialize;
 
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use crate::routes::FormData;
 
 use super::subscriber_email::SubscriberEmail;
 use super::subscriber_name::SubscriberName;
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 pub struct NewSubscriber {
     pub email: SubscriberEmail,

@@ -1,11 +1,7 @@
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use crate::helpers::spawn_app_locally;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 use zero2prod_axum::configuration::Settings;
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {

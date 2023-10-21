@@ -22,8 +22,6 @@ use crate::routes::get_hello;
 use crate::routes::health_check;
 use crate::routes::subscribe_handler;
 
-// ───── Body ─────────────────────────────────────────────────────────────── //
-
 pub enum ServerType {
     TcpSocket(Server<AddrIncoming, IntoMakeService<Router>>),
     UnixSocket(Server<SocketIncoming, IntoMakeService<Router>>),

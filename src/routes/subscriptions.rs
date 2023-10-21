@@ -5,13 +5,9 @@ use hyper::StatusCode;
 
 use serde::Deserialize;
 
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use crate::connection_pool::ConnectionPool;
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
 use crate::startup::AppState;
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 #[derive(Deserialize, Debug)]
 pub struct FormData {

@@ -1,10 +1,6 @@
 use clap::Parser;
 
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use zero2prod_axum::{configuration::Settings, startup::Application};
-
-// ───── Body ─────────────────────────────────────────────────────────────── //
 
 /// Backend zero2prod server, all args passed, unix socket preferred
 #[derive(Parser, Debug)]
