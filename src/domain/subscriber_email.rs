@@ -7,7 +7,7 @@ impl SubscriberEmail {
         if validator::validate_email(email) {
             Ok(Self(email.to_string()))
         } else {
-            Err("{} is not a valid subscriber email.")
+            Err("Is not a valid subscriber email.")
         }
     }
 }

@@ -105,7 +105,7 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
     }
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn subscribe_sends_a_confirmation_email_for_valid_data() {
     let config = Settings::load_configuration().unwrap();
 

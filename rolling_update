@@ -4,18 +4,17 @@
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-local_linux_user="ghashy"
-local_linux_host="192.168.64.17"
-local_project_path="projects/zero2prod_axum/"
+local_linux_host="ghashy@debian@orb"
+local_project_path="dev/projects/zero2prod_axum/"
 
 binary="target/x86_64-unknown-linux-gnu/release/zero2prod"
 remote_user="ghashy"
 remote_host="151.248.121.67"
 remote_port="39000"
-remote_dir="~/apps/zero2prod"
+remote_dir="apps/zero2prod"
 
-echo -e "\nConnecting to debian.local..."
-ssh -i '~/.ssh/id_rsa' "$local_linux_user@$local_linux_host" \
+echo -e "\nConnecting to debian.orb.local..."
+ssh "$local_linux_host" \
     "echo -e \"${GREEN}Connected!\n${NC}\" &&
      cd $local_project_path &&
      git pull &&
@@ -25,18 +24,8 @@ ssh -i '~/.ssh/id_rsa' "$local_linux_user@$local_linux_host" \
      echo -e \"${GREEN}Binary copied to target server!\n${NC}\"
     "
 
-ssh -p "$remote_port" -i '~/.ssh/id_rsa' "$remote_user@$remote_host" \
-    "cd $remote_dir"
+# ssh -p "$remote_port" -i '~/.ssh/id_rsa' "$remote_user@$remote_host" \
+    # "cd $remote_dir"
 
 # Enable the interpretation of backslash escapes in the echoed string.
 echo -e "${GREEN}Finished!${NC}"
-
-
-# Copy the file using scp
-
-# Check if the file was copied successfully
-# if [ $? -eq 0 ]; then
-    # echo "File uploaded successfully."
-# else
-    # echo "Error uploading file."
-# fi

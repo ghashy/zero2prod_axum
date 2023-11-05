@@ -6,7 +6,7 @@ use hyper::StatusCode;
 use serde::Deserialize;
 
 use crate::connection_pool::ConnectionPool;
-use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
+use crate::domain::NewSubscriber;
 use crate::startup::AppState;
 
 #[derive(Deserialize, Debug)]

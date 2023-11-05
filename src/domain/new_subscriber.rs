@@ -1,5 +1,3 @@
-use serde::Deserialize;
-
 use crate::routes::FormData;
 
 use super::subscriber_email::SubscriberEmail;

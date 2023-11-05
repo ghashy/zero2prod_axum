@@ -2,13 +2,13 @@
 
 echo "First request: \n\n"
 
-curl -vs -b cookie.txt \
-        -c cookie.txt \
-        -X POST \
-        -H 'Accept: application/json' \
-        -H 'Content-Type: application/json' \
-        -H 'X-Postmark-Server-Token: 2af416e2-6f24-4989-9375-bd4fcfc667d8' \
-        -d '{
+curl --verbose --silent --cookie cookie.txt \
+        --cookie-jar cookie.txt \
+        --request POST \
+        --header 'Accept: application/json' \
+        --header 'Content-Type: application/json' \
+        --header 'X-Postmark-Server-Token: 2af416e2-6f24-4989-9375-bd4fcfc667d8' \
+        --data '{
           "From": "sender@gmail.com",
           "To": "obsidin.musiwork@gmail.com",
           "Subject": "Postmark test",
@@ -20,4 +20,4 @@ curl -vs -b cookie.txt \
 
 echo "\n\nSecond request: \n\n"
 
-curl -vs -b cookie.txt -c cookie.txt 127.0.0.1:3000/api/tickets
+curl --verbose --silent --cookie cookie.txt --cookie-jar cookie.txt 127.0.0.1:3000/api/tickets

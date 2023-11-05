@@ -13,8 +13,6 @@ use hyperlocal::SocketIncoming;
 use hyperlocal::UnixServerExt;
 use secrecy::ExposeSecret;
 
-// ───── Current Crate Imports ────────────────────────────────────────────── //
-
 use crate::configuration::Settings;
 use crate::connection_pool::ConnectionPool;
 use crate::email_client::EmailClient;
@@ -105,10 +103,12 @@ impl Application {
             unix_socket_file,
         })
     }
+
     /// Get port on which current application is ran.
     pub fn port(&self) -> PortType {
         self.port.clone()
     }
+
     /// This function only returns when the application is stopped.
     pub async fn run_until_stopped(self) -> Result<(), hyper::Error> {
         match self.server {

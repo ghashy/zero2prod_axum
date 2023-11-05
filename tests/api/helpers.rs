@@ -43,6 +43,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     let connection_string = config.database.connection_string();
     // We should randomize app port
     config.app_port = 0;
+    // Disable unix sockets for tests
     config.unix_socket = String::new();
     let application = Application::build(config)
         .await
@@ -50,7 +51,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
 
     let zero2prod_axum::startup::PortType::Tcp(port) = application.port()
     else {
-        panic!();
+        unreachable!();
     };
 
     let address = format!("http://127.0.0.1:{}", port);

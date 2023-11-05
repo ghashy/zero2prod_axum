@@ -199,8 +199,6 @@ mod email_client_tests {
         assert!(result.is_err());
     }
 
-    // ───── Helpers ──────────────────────────────────────────────────────── //
-
     fn subject() -> String {
         Sentence(1..2).fake()
     }
