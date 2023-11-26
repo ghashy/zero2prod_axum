@@ -1,0 +1,23 @@
+# configuration.yaml
+# App port, addr, unix socket dir
+app_port: 8000
+app_addr: "0.0.0.0"
+base_url: "https://ghashy.ru"
+# unix_socket: "/Users/ghashy/Desktop/sockets/sock1.sock"
+unix_socket: ""
+database:
+  host: "127.0.0.1"
+  port: 5432
+  # If non empty, use unix socket file. Shold be directory with .s.PGSQL.5432 file.
+  socket_file: "/tmp"
+  username: "ghashy"
+  password: "ghashy"
+  database_name: "newsletter"
+email_client:
+  base_url: "https://api.postmarkapp.com"
+  sender_email: "test@gmail.com"
+  # IMPORTANT: We are only setting the development value,
+  # we'll deal with the production token outside of version control
+  # (given that it's a sensitive secret!).
+  authorization_token: "my_token"
+  timeout: 10000

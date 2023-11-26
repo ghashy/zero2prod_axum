@@ -1,5 +1,5 @@
 /// This type guarantees correctness of `subscriber's` email address.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SubscriberEmail(String);
 
 impl SubscriberEmail {

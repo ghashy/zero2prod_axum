@@ -16,6 +16,7 @@ use secrecy::ExposeSecret;
 use crate::configuration::Settings;
 use crate::connection_pool::ConnectionPool;
 use crate::email_client::EmailClient;
+use crate::routes::confirm;
 use crate::routes::get_hello;
 use crate::routes::health_check;
 use crate::routes::subscribe_handler;
@@ -44,11 +45,11 @@ pub struct Application {
 /// at the launch stage.
 #[derive(Clone)]
 pub struct AppState {
+    pub base_url: String,
     pub pool: ConnectionPool,
     pub email_client: EmailClient,
 }
 
-// Public
 impl Application {
     /// Build a new server.
     ///
@@ -81,8 +82,9 @@ impl Application {
             format!("{}:{}", configuration.app_addr, configuration.app_port);
         let listener = TcpListener::bind(address)?;
 
-        let (server, unix_socket_file) = Self::build_server(
+        let (server, unix_socket_path) = Self::build_server(
             &configuration.unix_socket,
+            &configuration.base_url,
             listener,
             postgres_connection,
             email_client,
@@ -93,14 +95,14 @@ impl Application {
                 PortType::Tcp(server.local_addr().port())
             }
             ServerType::UnixSocket(_) => {
-                PortType::Unix(unix_socket_file.clone().unwrap())
+                PortType::Unix(unix_socket_path.clone().unwrap())
             }
         };
 
         Ok(Self {
             server,
             port,
-            unix_socket_file,
+            unix_socket_file: unix_socket_path,
         })
     }
 
@@ -137,25 +139,28 @@ impl Application {
             }
         }
     }
-}
 
-// Private
-impl Application {
     /// Configure `Server`.
     fn build_server(
         unix_socket: &str,
+        base_url: &str,
         listener: TcpListener,
         pool: ConnectionPool,
         email_client: EmailClient,
     ) -> (ServerType, Option<PathBuf>) {
         // We do not wrap pool into arc because internally it alreaday has an
         // `Arc`, and copying is cheap.
-        let app_state = AppState { pool, email_client };
+        let app_state = AppState {
+            pool,
+            email_client,
+            base_url: base_url.to_string(),
+        };
         let app =
             Router::new()
                 .route("/health_check", routing::get(health_check))
                 .route("/hello", routing::get(get_hello))
                 .route("/subscriptions", routing::post(subscribe_handler))
+                .route("/subscriptions/confirm", routing::get(confirm))
                 // DEBUG:
                 .fallback(routing::get(
                     |uri: axum::http::Uri,

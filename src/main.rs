@@ -27,8 +27,6 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set up tracing");
 
-    tracing::info!("IM' BACKEND SERVICE!!!");
-
     // Panic if we can't read configuration
     let mut config =
         Settings::load_configuration().expect("Failed to read configuration.");

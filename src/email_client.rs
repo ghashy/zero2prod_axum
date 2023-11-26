@@ -42,9 +42,12 @@ impl EmailClient {
         })
     }
 
+    /// This function will send `POST` request to the
+    /// email delivery service, `Postmark` in this case
+    /// with data necessary to send the email to recipient.
     pub async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
         text_content: &str,
@@ -130,7 +133,7 @@ mod email_client_tests {
 
         // Act
         let _ = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
 
         // Assert
@@ -150,7 +153,7 @@ mod email_client_tests {
             .await;
 
         let result = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
 
         // Assert
@@ -170,7 +173,7 @@ mod email_client_tests {
             .await;
 
         let result = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
 
         // Assert
@@ -193,7 +196,7 @@ mod email_client_tests {
             .await;
 
         let result = email_client
-            .send_email(email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content())
             .await;
 
         assert!(result.is_err());

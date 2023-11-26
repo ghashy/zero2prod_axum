@@ -4,13 +4,25 @@ use wiremock::{Mock, ResponseTemplate};
 use zero2prod_axum::configuration::Settings;
 
 #[tokio::test]
-async fn subscribe_returns_a_200_for_valid_form_data() {
+async fn req_subscribe_returns_a_200_for_valid_form_data_and_subscriber_persists_in_db(
+) {
     let config = Settings::load_configuration().unwrap();
-    let test_app = spawn_app_locally(config).await;
+    let app = spawn_app_locally(config).await;
 
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    let response = test_app.post_subscriptions(body).await;
+    let body = "name=hello%20world&email=helloworld%40gmail.com";
 
+    // Add path and request type to already EXISTING mock server,
+    // (we are sending relay mail request to a mock server
+    // instead of a real email delivery service).
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    let response = app.post_subscriptions(body).await;
+
+    // CHECK RESPONSE
     assert_eq!(
         200,
         response.status().as_u16(),
@@ -18,50 +30,38 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         response.text().await.unwrap().as_str()
     );
 
-    let saved = test_app
+    let saved = app
         .pool
         .get()
         .await
         .unwrap()
         .query(
-            "SELECT email, name FROM subscriptions WHERE name = 'le guin'",
+            "SELECT email, name, status FROM subscriptions WHERE name = 'hello world'",
             &[],
         )
         .await
         .expect("Failed to fetch saved subscription.");
 
-    assert_eq!(
-        saved[0].get::<&str, &str>("email"),
-        "ursula_le_guin@gmail.com"
-    );
-    assert_eq!(saved[0].get::<&str, &str>("name"), "le guin");
+    // CHECK IF ENTRY IN DB EXISTS
+    assert_eq!(saved[0].get::<&str, &str>("email"), "helloworld@gmail.com");
+    assert_eq!(saved[0].get::<&str, &str>("name"), "hello world");
+    assert_eq!(saved[0].get::<&str, &str>("status"), "pending_confirmation");
 
-    // Remove test data from database.
-    let messages = test_app
+    // REMOVE TEST DATA FROM THE DATABASE.
+    let _ = app
         .pool
         .get()
         .await
         .unwrap()
-        .simple_query("DELETE FROM subscriptions WHERE name = 'le guin'")
+        .simple_query("DELETE FROM subscriptions WHERE name = 'hello world'")
         .await
         .expect("Failed to fetch saved subscription.");
-    for message in messages {
-        match message {
-            tokio_postgres::SimpleQueryMessage::Row(data) => {
-                println!("GOT ROW: {:?}", data)
-            }
-            tokio_postgres::SimpleQueryMessage::CommandComplete(n) => {
-                println!("GOT COMMAND_COMPLETE: {}", n);
-            }
-            _ => {}
-        }
-    }
 }
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
     let config = Settings::load_configuration().unwrap();
-    let test_app = spawn_app_locally(config).await;
+    let app = spawn_app_locally(config).await;
 
     let test_cases = vec![
         ("name=&email=ursula_le_guin%40gmail.com", "emtpy name"),
@@ -70,7 +70,7 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
     ];
 
     for (body, description) in test_cases {
-        let response = test_app.post_subscriptions(body).await;
+        let response = app.post_subscriptions(body).await;
 
         assert_eq!(
             400,
@@ -84,8 +84,7 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
 #[tokio::test]
 async fn subscribe_returns_a_422_when_data_is_missing() {
     let config = Settings::load_configuration().unwrap();
-
-    let test_app = spawn_app_locally(config).await;
+    let app = spawn_app_locally(config).await;
 
     let test_cases = vec![
         ("name=le%guin", "missing the email"),
@@ -94,7 +93,7 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
     ];
 
     for (invalid_body, error_message) in test_cases {
-        let response = test_app.post_subscriptions(invalid_body).await;
+        let response = app.post_subscriptions(invalid_body).await;
 
         assert_eq!(
             422,
@@ -105,13 +104,20 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
     }
 }
 
+/// Test that sending request `create a new subscription` to our APP
+/// sends a request to email delivery serivce to send to recipient
+/// a confirmation email and both plain body && html body contains
+/// single grammarly valid link.
+/// NOTE: actually code which has responsibility for sending email
+/// is in `crate::routes::subscriptions::send_confirmation_email`
+/// request handler.
 #[tokio::test]
-async fn subscribe_sends_a_confirmation_email_for_valid_data() {
+async fn req_subscribe_sends_a_confirmation_email_with_a_link() {
     let config = Settings::load_configuration().unwrap();
 
     // Arrange
     let app = spawn_app_locally(config).await;
-    let body = "name=le%guin&email=ursula_le_guin%40gmail.com";
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -120,10 +126,28 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
         .mount(&app.email_server)
         .await;
 
-    // Act
-    let response = app.post_subscriptions(body.into()).await;
-    println!("\nReponse: {}", response.text().await.unwrap().as_str());
+    // Send request to OUR app, 'POST, create a new subscription`
+    let _response = app.post_subscriptions(body.into()).await;
+    // println!("\nReponse: {}", response.text().await.unwrap().as_str());
 
     // Assert
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    // Get the first intercepted request
+    let email_received_request =
+        &app.email_server.received_requests().await.unwrap()[0];
+    let confirmation_links = app.get_confirmation_links(email_received_request);
+    // The two links should be identical
+    assert_eq!(confirmation_links.html, confirmation_links.plain_text);
+
+    // REMOVE TEST DATA FROM THE DATABASE.
+    let _ = app
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .simple_query("DELETE FROM subscriptions WHERE name = 'le guin'")
+        .await
+        .expect("Failed to fetch saved subscription.");
+
     // Mock asserts on drop
 }
