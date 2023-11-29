@@ -3,3 +3,4 @@
 Cargo.lock
 ./configuration
 /secrets
+/diagrams
