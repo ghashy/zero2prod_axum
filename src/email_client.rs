@@ -1,10 +1,31 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 use reqwest::Client;
 use secrecy::{ExposeSecret, Secret};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::SubscriberEmail;
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(try_from = "String")]
+pub enum EmailDeliveryService {
+    Postmark,
+    SMTP,
+}
+
+impl TryFrom<String> for EmailDeliveryService {
+    type Error = String;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "postmark" | "Postmark" => Ok(Self::Postmark),
+            "smtp" | "SMTP" => Ok(Self::SMTP),
+            _ => Err(format!(
+                "Can't construct EmailDeliveryService type from {}",
+                value
+            )),
+        }
+    }
+}
 
 /// This type handles the sending of emails.
 /// Internally, it includes a connection pool.
@@ -18,6 +39,7 @@ pub struct EmailClient {
     base_url: reqwest::Url,
     sender: SubscriberEmail,
     authorization_token: Secret<String>,
+    delivery_service: EmailDeliveryService,
 }
 
 /// TODO: I want to measure request
@@ -28,6 +50,7 @@ impl EmailClient {
         sender: SubscriberEmail,
         authorization_token: Secret<String>,
         timeout: std::time::Duration,
+        delivery_service: EmailDeliveryService,
     ) -> Result<Self, String> {
         let base_url =
             reqwest::Url::try_from(base_url.as_str()).map_err(|e| {
@@ -39,11 +62,12 @@ impl EmailClient {
             base_url,
             sender,
             authorization_token,
+            delivery_service,
         })
     }
 
     /// This function will send `POST` request to the
-    /// email delivery service, `Postmark` in this case
+    /// email delivery service, `smtp.bz` in this case
     /// with data necessary to send the email to recipient.
     pub async fn send_email(
         &self,
@@ -52,24 +76,49 @@ impl EmailClient {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), reqwest::Error> {
-        let url = self.base_url.join("/email").unwrap();
-        let request_body = SendEmailRequest {
-            from: Cow::Borrowed(self.sender.as_ref()),
-            to: Cow::Borrowed(recipient.as_ref()),
-            subject: Cow::Borrowed(subject),
-            html_body: Cow::Borrowed(html_content),
-            text_body: Cow::Borrowed(text_content),
-        };
-        self.http_client
-            .post(url)
-            .header(
-                "X-Postmark-Server-Token",
-                self.authorization_token.expose_secret(),
-            )
-            .json(&request_body)
-            .send()
-            .await?
-            .error_for_status()?;
+        match self.delivery_service {
+            EmailDeliveryService::Postmark => {
+                let url = self.base_url.join("/email").unwrap();
+                let request_body = SendEmailRequest {
+                    from: Cow::Borrowed(self.sender.as_ref()),
+                    to: Cow::Borrowed(recipient.as_ref()),
+                    subject: Cow::Borrowed(subject),
+                    html_body: Cow::Borrowed(html_content),
+                    text_body: Cow::Borrowed(text_content),
+                };
+                self.http_client
+                    .post(url)
+                    .header(
+                        "X-Postmark-Server-Token",
+                        self.authorization_token.expose_secret(),
+                    )
+                    .json(&request_body)
+                    .send()
+                    .await?
+                    .error_for_status()?;
+            }
+
+            EmailDeliveryService::SMTP => {
+                let url = self.base_url.join("/v1/smtp/send").unwrap();
+                let mut map = HashMap::new();
+                map.insert("name", "info");
+                map.insert("from", self.sender.as_ref());
+                map.insert("subject", subject);
+                map.insert("to", recipient.as_ref());
+                map.insert("html", html_content);
+                map.insert("text", text_content);
+
+                let pass = self.authorization_token.expose_secret();
+                self.http_client
+                    .post(url)
+                    .header("Authorization", pass)
+                    .form(&map)
+                    .send()
+                    .await?
+                    .error_for_status()?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -86,7 +135,7 @@ struct SendEmailRequest<'a> {
 // It is unit tests module, because it needs private type `SendEmailRequest`.
 #[cfg(test)]
 mod email_client_tests {
-    use super::SendEmailRequest;
+    use super::{EmailDeliveryService, SendEmailRequest};
     use crate::domain::SubscriberEmail;
     use crate::email_client::EmailClient;
     use fake::faker::internet::en::SafeEmail;
@@ -104,7 +153,6 @@ mod email_client_tests {
                 serde_json::from_slice::<SendEmailRequest>(&request.body);
             match request {
                 Ok(_r) => {
-                    // dbg!(_r);
                     return true;
                 }
                 Err(e) => {
@@ -116,10 +164,12 @@ mod email_client_tests {
     }
 
     #[tokio::test]
-    async fn send_email_sends_the_expected_request() {
+    async fn send_email_sends_the_expected_request_postmark() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let email_client = email_client(mock_server.uri()).unwrap();
+        let email_client =
+            email_client(mock_server.uri(), EmailDeliveryService::Postmark)
+                .unwrap();
 
         Mock::given(header_exists("X-Postmark-Server-Token"))
             .and(header("Content-Type", "application/json"))
@@ -141,10 +191,38 @@ mod email_client_tests {
     }
 
     #[tokio::test]
+    async fn send_email_sends_the_expected_request_smtp() {
+        // Arrange
+        let mock_server = MockServer::start().await;
+        let email_client =
+            email_client(mock_server.uri(), EmailDeliveryService::SMTP)
+                .unwrap();
+
+        Mock::given(header_exists("Authorization"))
+            .and(header("Content-Type", "application/x-www-form-urlencoded"))
+            .and(path("/v1/smtp/send"))
+            .and(method("POST"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // Act
+        let _ = email_client
+            .send_email(&email(), &subject(), &content(), &content())
+            .await;
+
+        // Assert
+        assert_eq!(mock_server.received_requests().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
     async fn send_email_returns_ok_when_request_succeeds() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let email_client = email_client(mock_server.uri()).unwrap();
+        let email_client =
+            email_client(mock_server.uri(), EmailDeliveryService::Postmark)
+                .unwrap();
 
         Mock::given(any())
             .respond_with(ResponseTemplate::new(200))
@@ -164,7 +242,9 @@ mod email_client_tests {
     async fn send_email_returns_error_when_request_fails() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let email_client = email_client(mock_server.uri()).unwrap();
+        let email_client =
+            email_client(mock_server.uri(), EmailDeliveryService::Postmark)
+                .unwrap();
 
         Mock::given(any())
             .respond_with(ResponseTemplate::new(500))
@@ -184,7 +264,9 @@ mod email_client_tests {
     async fn send_email_times_out_if_the_server_takes_too_long() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let email_client = email_client(mock_server.uri()).unwrap();
+        let email_client =
+            email_client(mock_server.uri(), EmailDeliveryService::Postmark)
+                .unwrap();
 
         let response = ResponseTemplate::new(200)
             .set_delay(std::time::Duration::from_secs(60));
@@ -214,12 +296,16 @@ mod email_client_tests {
         SubscriberEmail::parse(&SafeEmail().fake::<String>()).unwrap()
     }
 
-    fn email_client(base_url: String) -> Result<EmailClient, String> {
+    fn email_client(
+        base_url: String,
+        delivery_service: EmailDeliveryService,
+    ) -> Result<EmailClient, String> {
         EmailClient::new(
             base_url,
             email(),
             Secret::new(Faker.fake()),
             std::time::Duration::from_millis(200),
+            delivery_service,
         )
     }
 }

@@ -21,6 +21,8 @@ use crate::routes::get_hello;
 use crate::routes::health_check;
 use crate::routes::subscribe_handler;
 
+mod db_migration;
+
 pub enum ServerType {
     TcpSocket(Server<AddrIncoming, IntoMakeService<Router>>),
     UnixSocket(Server<SocketIncoming, IntoMakeService<Router>>),
@@ -61,6 +63,8 @@ impl Application {
         let postgres_connection =
             get_postgres_connection_pool(&configuration).await;
 
+        db_migration::run_migration(&postgres_connection).await;
+
         let timeout = configuration.email_client.timeout_millis();
 
         let sender_email =
@@ -73,6 +77,7 @@ impl Application {
             sender_email,
             configuration.email_client.authorization_token,
             timeout,
+            configuration.email_delivery_service,
         )
         .map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
@@ -84,7 +89,7 @@ impl Application {
 
         let (server, unix_socket_path) = Self::build_server(
             &configuration.unix_socket,
-            &configuration.base_url,
+            &configuration.app_base_url,
             listener,
             postgres_connection,
             email_client,

@@ -3,27 +3,31 @@
 
 ARG RUST_VERSION=1.74.0
 ARG APP_NAME=zero2prod
-FROM rust:${RUST_VERSION}-slim-bookworm AS build
+FROM rust:${RUST_VERSION}-alpine3.18 AS build
 ARG APP_NAME
 WORKDIR /app
 
-RUN apt update && apt install -y pkg-config libssl-dev gcc-x86-64-linux-gnu && \
-    rustup target add x86_64-unknown-linux-gnu
+RUN apk update && \
+    apk upgrade
+
+RUN apk add --no-cache \
+    musl-dev
 
 RUN --mount=type=bind,source=src,target=src \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
-    --mount=type=bind,source=.cargo,target=.cargo \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
     --mount=type=cache,target=/app/target/ \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     --mount=type=bind,source=migrations,target=migrations \
     set -e && \
-    cargo build --locked --release --target x86_64-unknown-linux-gnu && \
-    cp ./target/x86_64-unknown-linux-gnu/release/$APP_NAME /app/$APP_NAME
+    cargo build --locked --release && \
+    # cargo build --locked --release --target x86_64-unknown-linux-musl && \
+    cp ./target/release/$APP_NAME /app/$APP_NAME 
 
 ################################################################################
 # Create a stage for running the application.
-FROM --platform=linux/amd64 debian:bookworm-slim AS final
+# FROM debian:bookworm-slim AS final
+FROM alpine:3.18.4 AS final
 
 # Create a non-privileged user that the app will run under.
 ARG UID=10001
@@ -50,4 +54,3 @@ EXPOSE 8000
 
 # What the container should run when it is started.
 CMD ["/app/zero2prod"]
-

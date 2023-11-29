@@ -2,22 +2,18 @@
 # App port, addr, unix socket dir
 app_port: 8000
 app_addr: "127.0.0.1"
-base_url: "http://127.0.0.1:8000"
-# unix_socket: "/Users/ghashy/Desktop/sockets/sock1.sock"
+app_base_url: "http://127.0.0.1:8000"
 unix_socket: ""
+email_delivery_service: postmark
 database:
   host: "mypg.orb.local"
   port: 5432
-  # If non empty, use unix socket file. Shold be directory with .s.PGSQL.5432 file.
-  socket_file: ""
+  unix_socket: ""
   username: "postgres"
   password: "ghashy"
   database_name: "newsletter"
 email_client:
   base_url: "https://api.postmarkapp.com"
   sender_email: "test@gmail.com"
-  # IMPORTANT: We are only setting the development value,
-  # we'll deal with the production token outside of version control
-  # (given that it's a sensitive secret!).
   authorization_token: "my_token"
   timeout: 10000

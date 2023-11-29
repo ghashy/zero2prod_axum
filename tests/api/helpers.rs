@@ -1,7 +1,5 @@
 //! This is a module with common initialization functions.
 
-use std::env::temp_dir;
-
 use bb8_postgres::PostgresConnectionManager;
 use secrecy::{ExposeSecret, Secret};
 use wiremock::MockServer;
@@ -88,12 +86,14 @@ pub async fn spawn_postgres_pool(
     bb8::Pool::builder().build(manager).await.unwrap()
 }
 
+/// Toggle tracing output by commenting/uncommenting
+/// the first lines in this function.
 pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_level(true)
-        .finish();
-    let _ = tracing::subscriber::set_global_default(subscriber);
+    // let subscriber = tracing_subscriber::fmt()
+    //     .with_max_level(tracing::Level::INFO)
+    //     .with_level(true)
+    //     .finish();
+    // let _ = tracing::subscriber::set_global_default(subscriber);
 
     let connection_string = config.database.connection_string();
 

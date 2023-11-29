@@ -1,7 +1,6 @@
 //! src/routes/subscriptions_confirm.rs
 
 use axum::extract::{Query, State};
-use bb8::PooledConnection;
 use hyper::StatusCode;
 use uuid::Uuid;
 
@@ -38,6 +37,7 @@ pub async fn confirm(
         );
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
+    tracing::info!("Subscriber with uuid: {} confirmed", subscriber_id);
     return StatusCode::OK;
 }
 
