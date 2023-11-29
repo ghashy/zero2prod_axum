@@ -37,8 +37,6 @@ pub struct Settings {
     pub app_port: u16,
     pub app_addr: Ipv4Addr,
     pub app_base_url: String,
-    /// If this parameter set to non-zero length String, use unix sockets.
-    pub unix_socket: String,
     pub email_client: EmailClientSettings,
     pub email_delivery_service: EmailDeliveryService,
 }
@@ -77,13 +75,12 @@ impl Settings {
                     "PG_PASSWORD_FILE",
                 )?)),
                 host: std::env::var("PG_HOST")?,
-                unix_socket: String::new(),
+                unix_socket: None,
                 database_name: std::env::var("PG_DBNAME")?,
             },
             app_port: std::env::var("APP_PORT")?.parse::<u16>().unwrap(),
             app_addr: std::env::var("APP_ADDR")?.parse::<Ipv4Addr>().unwrap(),
             app_base_url: std::env::var("APP_BASE_URL")?,
-            unix_socket: String::new(),
             email_client: EmailClientSettings {
                 base_url: std::env::var("EMAIL_CLIENT_BASE_URL")?,
                 sender_email: std::env::var("SENDER_EMAIL")?,
@@ -105,19 +102,24 @@ pub struct DatabaseSettings {
     pub username: String,
     pub password: Secret<String>,
     pub host: String,
-    pub unix_socket: String,
+    pub unix_socket: Option<String>,
     pub database_name: String,
 }
 
 impl DatabaseSettings {
     /// `tokio-postgres` will try to connect to unix first, and then to tcp.
     pub fn connection_string(&self) -> secrecy::Secret<String> {
+        let unix_socket = if let Some(ref s) = self.unix_socket {
+            s.as_str()
+        } else {
+            ""
+        };
         secrecy::Secret::new(format!(
             "user={} password={} dbname={} host={},{} application_name={}",
             self.username,
             self.password.expose_secret(),
             self.database_name,
-            self.unix_socket,
+            unix_socket,
             self.host,
             "zero2prod"
         ))

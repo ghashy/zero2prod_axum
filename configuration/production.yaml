@@ -3,7 +3,6 @@
 app_port: 8000
 app_addr: "0.0.0.0"
 app_base_url: "https://ghashy.ru"
-unix_socket: ""
 database:
   host: "db"
   port: 5432

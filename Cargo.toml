@@ -16,7 +16,6 @@ axum = { version = "0.7.1", features = ["macros"] }
 hyper = "1.0.1"
 tokio = { version = "1.34.0", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-postgres = { version = "0.7.10", features = ["with-uuid-1"] }
-hyperlocal = "0.8"
 # postgres-native-tls = "0.5.0"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"

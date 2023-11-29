@@ -1,6 +1,6 @@
 use axum::response::IntoResponse;
 
-use hyper::Body;
+use axum::body::Body;
 use hyper::Request;
 use hyper::StatusCode;
 

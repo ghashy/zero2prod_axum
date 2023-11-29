@@ -109,10 +109,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
         .await
         .expect("Failed to build application");
 
-    let zero2prod_axum::startup::PortType::Tcp(port) = application.port()
-    else {
-        unreachable!();
-    };
+    let port = application.port();
 
     let address = format!("http://127.0.0.1:{}", port);
 

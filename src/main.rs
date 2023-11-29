@@ -10,9 +10,6 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set up tracing");
 
-    // Panic if we can't read configuration
-    // let config =
-    //     Settings::load_configuration().expect("Failed to read configuration.");
     let config = Settings::load_configuration_from_env().unwrap();
 
     if let Err(e) = Application::build(config)
