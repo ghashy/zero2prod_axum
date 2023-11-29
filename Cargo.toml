@@ -12,21 +12,20 @@ name = "zero2prod"
 path = "src/main.rs"
 
 [dependencies]
-axum = { version = "0.6.20", features = ["macros"] }
-hyper = "0.14.27"
+axum = { version = "0.7.1", features = ["macros"] }
+hyper = "1.0.1"
 tokio = { version = "1.34.0", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-postgres = { version = "0.7.10", features = ["with-uuid-1"] }
 hyperlocal = "0.8"
-clap = { version = "4.3.19", features  = ["derive"] }
 # postgres-native-tls = "0.5.0"
-serde = { version = "1.0.186", features = ["derive"] }
-serde_json = "1.0.107"
-config = "0.13.3"
+serde = { version = "1.0.193", features = ["derive"] }
+serde_json = "1.0.108"
+config = "0.13.4"
 bb8 = "0.8.1"
 bb8-postgres = "0.8.1"
 refinery = { version = "0.8.11", features = ["tokio-postgres"] }
-uuid = { version = "1.4.1", features = ["v4"] }
-tracing = "0.1.37"
+uuid = { version = "1.6.1", features = ["v4"] }
+tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["chrono"] }
 secrecy = { version = "0.8.0", features = ["serde"] }
 validator = "0.16.1"
@@ -41,11 +40,5 @@ rand = { version = "0.8.5", features = ["std_rng"] }
 # Dev dependencies are used exclusively when running test or examples
 # They do not get included in the final application binary!
 [dev-dependencies]
-wiremock = "0.5.19"
-fake = "2.8.0"
-
-# [profile.dev]
-# opt-level = 3
-
-# [profile.dev.package."*"]
-# opt-level = 3
+wiremock = "0.5.21"
+fake = "2.9.1"
