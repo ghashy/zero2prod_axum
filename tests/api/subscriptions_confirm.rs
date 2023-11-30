@@ -1,12 +1,11 @@
 //! tests/api/subscriptions_confirm.rs
-use reqwest::Url;
 use wiremock::{
     matchers::{method, path},
     Mock, ResponseTemplate,
 };
 use zero2prod_axum::configuration::Settings;
 
-use crate::helpers::{spawn_app_locally, ConfirmationLinks};
+use crate::helpers::spawn_app_locally;
 
 #[tokio::test]
 async fn confirmations_without_token_are_rejected_with_a_400() {

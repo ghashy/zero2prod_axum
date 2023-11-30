@@ -6,10 +6,10 @@ use hyper::StatusCode;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
+use tokio_postgres::error::SqlState;
 use tokio_postgres::Transaction;
 use uuid::Uuid;
 
-use crate::connection_pool::ConnectionPool;
 use crate::domain::NewSubscriber;
 use crate::email_client::EmailClient;
 use crate::startup::AppState;
@@ -18,6 +18,14 @@ use crate::startup::AppState;
 pub struct FormData {
     pub email: String,
     pub name: String,
+}
+
+// TODO: WRITE HOW IT WORKS VERY DETAILED
+#[derive(PartialEq, Eq, Debug)]
+enum SubscriberStatus {
+    NonExisting,
+    Pending,
+    Confirmed,
 }
 
 #[tracing::instrument(
@@ -77,20 +85,64 @@ pub async fn subscribe_handler(
         }
     };
 
-    if let Err(e) =
-        insert_subscriber_to_db(&new_subscriber, &mut transaction, request_id)
-            .await
-    {
-        tracing::error!("Failed to execute query: {:?}", e);
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    }
+    // DO REQUEST TO DB, AND CHECK IF IT ALREADY EXISTS AND NOT CONFIRMED, OR NOT EXISTS
+    let subscriber_status =
+        match get_subscriber_status(&mut transaction, &new_subscriber).await {
+            Ok(s) => {
+                tracing::info!("Subscriber status: {:?}", s);
+                s
+            }
+            Err(e) => {
+                tracing::error!("Db error: {e}");
+                return StatusCode::INTERNAL_SERVER_ERROR;
+            }
+        };
 
     let subscription_token = generate_subscription_token();
-    if let Err(e) =
-        store_token(&mut transaction, request_id, &subscription_token).await
-    {
-        tracing::error!("Failed to store token in db, error: {e}");
-        return StatusCode::INTERNAL_SERVER_ERROR;
+
+    match subscriber_status {
+        SubscriberStatus::NonExisting => {
+            match insert_subscriber_to_db(
+                &new_subscriber,
+                &mut transaction,
+                request_id,
+            )
+            .await
+            {
+                Ok(()) => (),
+                Err(e) => {
+                    tracing::error!("Failed to execute query: {:?}", e);
+                    if e.code().is_some_and(|sqlstate| {
+                        *sqlstate == SqlState::UNIQUE_VIOLATION
+                    }) {
+                        return StatusCode::CONFLICT;
+                    } else {
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+            }
+
+            if let Err(e) =
+                store_token(&mut transaction, request_id, &subscription_token)
+                    .await
+            {
+                tracing::error!("Failed to store token in db, error: {e}");
+                return StatusCode::INTERNAL_SERVER_ERROR;
+            }
+        }
+        SubscriberStatus::Pending => {
+            if let Err(e) =
+                update_token(&mut transaction, request_id, &subscription_token)
+                    .await
+            {
+                tracing::error!("Failed to update token in db, error: {e}");
+                return StatusCode::INTERNAL_SERVER_ERROR;
+            }
+        }
+        SubscriberStatus::Confirmed => {
+            tracing::error!("This email already confirmed: {}", form.email);
+            return StatusCode::CONFLICT;
+        }
     }
 
     // We are ignoring email delivery errors for now.
@@ -151,12 +203,12 @@ async fn insert_subscriber_to_db<'a>(
     subscriber: &NewSubscriber,
     transaction: &mut Transaction<'a>,
     id: uuid::Uuid,
-) -> Result<(), String> {
+) -> Result<(), tokio_postgres::error::Error> {
     transaction
         .query_opt(
-            r#"INSERT INTO subscriptions(id, email, name, subscribed_at, status)
+            "INSERT INTO subscriptions(id, email, name, subscribed_at, status)
                        VALUES ($1, $2, $3, $4, 'pending_confirmation')
-                    "#,
+                    ",
             &[
                 // These types implements `ToSql` trait.
                 &id,
@@ -165,11 +217,7 @@ async fn insert_subscriber_to_db<'a>(
                 &std::time::SystemTime::now(),
             ],
         )
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to execute query: {:?}", e);
-            e.to_string()
-        })?;
+        .await?;
     Ok(())
 }
 
@@ -181,7 +229,7 @@ async fn store_token<'a>(
     transaction: &mut Transaction<'a>,
     subscriber_id: Uuid,
     subscription_token: &str,
-) -> Result<(), String> {
+) -> Result<(), tokio_postgres::Error> {
     transaction
         .query(
             r#"INSERT INTO subscription_tokens
@@ -189,9 +237,58 @@ async fn store_token<'a>(
               VALUES ($1, $2)"#,
             &[&subscription_token, &subscriber_id],
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
+}
+
+#[tracing::instrument(
+    name = "Update subscriber token in db"
+    skip(subscription_token, transaction)
+)]
+async fn update_token<'a>(
+    transaction: &mut Transaction<'a>,
+    subscriber_id: Uuid,
+    subscription_token: &str,
+) -> Result<(), tokio_postgres::Error> {
+    let rows_modified = transaction
+        .execute(
+            r#"UPDATE subscription_tokens
+               SET subscription_token = $1
+               WHERE subscriber_id = $2"#,
+            &[&subscription_token, &subscriber_id],
+        )
+        .await?;
+    assert_eq!(rows_modified, 1);
+    Ok(())
+}
+
+#[tracing::instrument(
+    name = "Check subscriber current status"
+    skip(new_subscriber, transaction)
+)]
+async fn get_subscriber_status<'a>(
+    transaction: &mut Transaction<'a>,
+    new_subscriber: &NewSubscriber,
+) -> Result<SubscriberStatus, tokio_postgres::Error> {
+    let rows = transaction
+        .query_opt(
+            r#"SELECT status
+               FROM subscriptions
+               WHERE email = $1"#,
+            &[&new_subscriber.email.as_ref()],
+        )
+        .await?;
+
+    // Return
+    if let Some(row) = rows {
+        match row.get::<&str, &str>("status") {
+            "confirmed" => Ok(SubscriberStatus::Confirmed),
+            "pending_confirmation" => Ok(SubscriberStatus::Pending),
+            _ => unreachable!(),
+        }
+    } else {
+        Ok(SubscriberStatus::NonExisting)
+    }
 }
 
 /// Using 25 characters we get roughly ~10^45 possible tokens -
