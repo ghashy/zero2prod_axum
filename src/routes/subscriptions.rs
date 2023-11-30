@@ -14,13 +14,20 @@ use crate::domain::NewSubscriber;
 use crate::email_client::EmailClient;
 use crate::startup::AppState;
 
+// TODO: WRITE HOW IT WORKS VERY DETAILED
+// 1. We get request with form: email, name. If not correct return BAD_REQUEST.
+// 2. We check database: is that email in db already? We check subscriber stataus.
+// 3. If there are no such email in db, we generate unique token, generate request id (subscriber_id), and store them in db.
+// 4. If there are such email, check its status:
+//     - If pending, we update token, and send new email with this confirmation token.
+//     - If confirmed, return CONFLICT response.
+
 #[derive(Deserialize, Debug)]
 pub struct FormData {
     pub email: String,
     pub name: String,
 }
 
-// TODO: WRITE HOW IT WORKS VERY DETAILED
 #[derive(PartialEq, Eq, Debug)]
 enum SubscriberStatus {
     NonExisting,
@@ -45,7 +52,7 @@ pub async fn subscribe_handler(
     let request_id = uuid::Uuid::new_v4();
     tracing::Span::current().record("request_id", request_id.to_string());
 
-    // Convert `&FormData` into a `NewSubscriber`.
+    // TRY to convert `&FormData` into a `NewSubscriber`.
     let new_subscriber = match (&form.0).try_into() {
         Ok(sub) => sub,
         Err(e) => {
@@ -56,15 +63,14 @@ pub async fn subscribe_handler(
         }
     };
 
-    let pool = state.pool;
-
     tracing::info!(
         "Adding '{}' '{}' as a new subscriber",
         form.email,
         form.name
     );
 
-    let mut connection = match pool.get().await.map_err(|e| match e {
+    // TRY to get connection from pool
+    let mut connection = match state.pool.get().await.map_err(|e| match e {
         bb8::RunError::User(e) => e.to_string(),
         bb8::RunError::TimedOut => String::from("Error: bb8::TimedOut"),
     }) {
@@ -75,6 +81,7 @@ pub async fn subscribe_handler(
         }
     };
 
+    // TRY to start a new transaction on db
     let mut transaction = match connection.transaction().await {
         Ok(t) => t,
         Err(e) => {
@@ -85,7 +92,7 @@ pub async fn subscribe_handler(
         }
     };
 
-    // DO REQUEST TO DB, AND CHECK IF IT ALREADY EXISTS AND NOT CONFIRMED, OR NOT EXISTS
+    // Check current subscriber status
     let subscriber_status =
         match get_subscriber_status(&mut transaction, &new_subscriber).await {
             Ok(s) => {
@@ -109,7 +116,9 @@ pub async fn subscribe_handler(
             )
             .await
             {
-                Ok(()) => (),
+                Ok(()) => {
+                    tracing::info!("New subscriber details have been saved")
+                }
                 Err(e) => {
                     tracing::error!("Failed to execute query: {:?}", e);
                     if e.code().is_some_and(|sqlstate| {
@@ -131,9 +140,12 @@ pub async fn subscribe_handler(
             }
         }
         SubscriberStatus::Pending => {
-            if let Err(e) =
-                update_token(&mut transaction, request_id, &subscription_token)
-                    .await
+            if let Err(e) = update_token(
+                &mut transaction,
+                new_subscriber.email.as_ref(),
+                &subscription_token,
+            )
+            .await
             {
                 tracing::error!("Failed to update token in db, error: {e}");
                 return StatusCode::INTERNAL_SERVER_ERROR;
@@ -162,7 +174,7 @@ pub async fn subscribe_handler(
         tracing::error!("Failed to send confirmation email, error: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
     } else {
-        tracing::info!("New subscriber details have been saved");
+        tracing::info!("Db transaction commited!");
         StatusCode::OK
     }
 }
@@ -247,15 +259,34 @@ async fn store_token<'a>(
 )]
 async fn update_token<'a>(
     transaction: &mut Transaction<'a>,
-    subscriber_id: Uuid,
+    email: &str,
     subscription_token: &str,
 ) -> Result<(), tokio_postgres::Error> {
     let rows_modified = transaction
         .execute(
-            r#"UPDATE subscription_tokens
-               SET subscription_token = $1
-               WHERE subscriber_id = $2"#,
-            &[&subscription_token, &subscriber_id],
+            r#"
+            DELETE FROM subscription_tokens
+            WHERE subscriber_id = (
+                SELECT id
+                FROM subscriptions
+                WHERE email = $1
+            );"#,
+            &[&email],
+        )
+        .await?;
+    assert_eq!(rows_modified, 1);
+    let rows_modified = transaction
+        .execute(
+            r#"
+            INSERT INTO subscription_tokens
+            (subscription_token, subscriber_id)
+            VALUES ($1, (
+                    SELECT id
+                    FROM subscriptions
+                    WHERE email = $2
+                )
+            );"#,
+            &[&subscription_token, &email],
         )
         .await?;
     assert_eq!(rows_modified, 1);
