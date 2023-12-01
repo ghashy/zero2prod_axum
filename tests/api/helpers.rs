@@ -1,11 +1,12 @@
 //! This is a module with common initialization functions.
 
-use bb8_postgres::PostgresConnectionManager;
-use secrecy::{ExposeSecret, Secret};
+use deadpool_postgres::Pool;
+use secrecy::ExposeSecret;
+use tokio_postgres::NoTls;
 use wiremock::MockServer;
 
 use zero2prod_axum::{
-    configuration::Settings, connection_pool::ConnectionPool,
+    configuration::{DatabaseSettings, Settings},
     startup::Application,
 };
 
@@ -14,7 +15,7 @@ use zero2prod_axum::{
 /// such as Postmark.
 pub struct TestApp {
     pub address: String,
-    pub pool: ConnectionPool,
+    pub pool: Pool,
     pub email_server: MockServer,
     pub port: u16,
 }
@@ -75,15 +76,20 @@ impl TestApp {
     }
 }
 
-pub async fn spawn_postgres_pool(
-    connection_string: Secret<String>,
-) -> ConnectionPool {
-    let manager = PostgresConnectionManager::new_from_stringlike(
-        connection_string.expose_secret(),
-        tokio_postgres::NoTls,
-    )
-    .unwrap();
-    bb8::Pool::builder().build(manager).await.unwrap()
+pub async fn spawn_postgres_pool(db_config: &DatabaseSettings) -> Pool {
+    let mut config = deadpool_postgres::Config::new();
+    config.user = Some(db_config.username.clone());
+    config.dbname = Some(db_config.username.clone());
+    config.host = Some(db_config.host.clone());
+    config.password = Some(db_config.password.expose_secret().clone());
+    let pool = config
+        .create_pool(Some(deadpool::Runtime::Tokio1), NoTls)
+        .expect("Failed to build postgres connection pool");
+    let _ = pool
+        .get()
+        .await
+        .expect("Failed to get postgres connection from pool");
+    pool
 }
 
 /// Toggle tracing output by commenting/uncommenting
@@ -95,8 +101,6 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     //     .finish();
     // let _ = tracing::subscriber::set_global_default(subscriber);
 
-    let connection_string = config.database.connection_string();
-
     // We should randomize app port
     config.app_port = 0;
 
@@ -105,6 +109,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     // Set base_url to our MockServer instead of real email delivery service.
     config.email_client.base_url = email_server.uri();
 
+    let db_config = config.database.clone();
     let application = Application::build(config)
         .await
         .expect("Failed to build application");
@@ -119,7 +124,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     TestApp {
         address,
         // This pool is separate from our app's pool
-        pool: spawn_postgres_pool(connection_string).await,
+        pool: spawn_postgres_pool(&db_config).await,
         email_server,
         port,
     }

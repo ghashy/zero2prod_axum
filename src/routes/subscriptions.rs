@@ -6,10 +6,12 @@ use hyper::StatusCode;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
+use time::OffsetDateTime;
 use tokio_postgres::error::SqlState;
 use tokio_postgres::Transaction;
 use uuid::Uuid;
 
+use crate::cornucopia::queries::subscriptions;
 use crate::domain::NewSubscriber;
 use crate::email_client::EmailClient;
 use crate::startup::AppState;
@@ -70,10 +72,7 @@ pub async fn subscribe_handler(
     );
 
     // TRY to get connection from pool
-    let mut connection = match state.pool.get().await.map_err(|e| match e {
-        bb8::RunError::User(e) => e.to_string(),
-        bb8::RunError::TimedOut => String::from("Error: bb8::TimedOut"),
-    }) {
+    let mut connection = match state.pool.get().await {
         Ok(c) => c,
         Err(e) => {
             tracing::error!("Failed to get PG connection from pool: {e}");
@@ -216,39 +215,31 @@ async fn insert_subscriber_to_db<'a>(
     transaction: &mut Transaction<'a>,
     id: uuid::Uuid,
 ) -> Result<(), tokio_postgres::error::Error> {
-    transaction
-        .query_opt(
-            "INSERT INTO subscriptions(id, email, name, subscribed_at, status)
-                       VALUES ($1, $2, $3, $4, 'pending_confirmation')
-                    ",
-            &[
-                // These types implements `ToSql` trait.
-                &id,
-                &subscriber.email.as_ref(),
-                &subscriber.name.as_ref(),
-                &std::time::SystemTime::now(),
-            ],
+    subscriptions::insert_new_subscription()
+        .bind(
+            transaction,
+            &id,
+            &subscriber.email.as_ref(),
+            &subscriber.name.as_ref(),
+            &OffsetDateTime::now_utc(),
         )
         .await?;
     Ok(())
 }
 
+//──────────────────────────────────────────────────────────────────────────//
+
 #[tracing::instrument(
     name = "Store subscription token in the database"
-    skip(subscription_token, transaction)
+    skip(subscription_token, transaction, )
 )]
 async fn store_token<'a>(
     transaction: &mut Transaction<'a>,
     subscriber_id: Uuid,
     subscription_token: &str,
 ) -> Result<(), tokio_postgres::Error> {
-    transaction
-        .query(
-            r#"INSERT INTO subscription_tokens
-                (subscription_token, subscriber_id)
-              VALUES ($1, $2)"#,
-            &[&subscription_token, &subscriber_id],
-        )
+    subscriptions::insert_new_token()
+        .bind(transaction, &subscription_token, &subscriber_id)
         .await?;
     Ok(())
 }
@@ -262,32 +253,12 @@ async fn update_token<'a>(
     email: &str,
     subscription_token: &str,
 ) -> Result<(), tokio_postgres::Error> {
-    let rows_modified = transaction
-        .execute(
-            r#"
-            DELETE FROM subscription_tokens
-            WHERE subscriber_id = (
-                SELECT id
-                FROM subscriptions
-                WHERE email = $1
-            );"#,
-            &[&email],
-        )
+    let rows_modified = subscriptions::delete_token_by_email()
+        .bind(transaction, &email)
         .await?;
     assert_eq!(rows_modified, 1);
-    let rows_modified = transaction
-        .execute(
-            r#"
-            INSERT INTO subscription_tokens
-            (subscription_token, subscriber_id)
-            VALUES ($1, (
-                    SELECT id
-                    FROM subscriptions
-                    WHERE email = $2
-                )
-            );"#,
-            &[&subscription_token, &email],
-        )
+    let rows_modified = subscriptions::insert_token_by_email()
+        .bind(transaction, &subscription_token, &email)
         .await?;
     assert_eq!(rows_modified, 1);
     Ok(())
@@ -301,18 +272,14 @@ async fn get_subscriber_status<'a>(
     transaction: &mut Transaction<'a>,
     new_subscriber: &NewSubscriber,
 ) -> Result<SubscriberStatus, tokio_postgres::Error> {
-    let rows = transaction
-        .query_opt(
-            r#"SELECT status
-               FROM subscriptions
-               WHERE email = $1"#,
-            &[&new_subscriber.email.as_ref()],
-        )
+    let rows_modified = subscriptions::get_status()
+        .bind(transaction, &new_subscriber.email.as_ref())
+        .opt()
         .await?;
 
     // Return
-    if let Some(row) = rows {
-        match row.get::<&str, &str>("status") {
+    if let Some(row) = rows_modified {
+        match row.as_str() {
             "confirmed" => Ok(SubscriberStatus::Confirmed),
             "pending_confirmation" => Ok(SubscriberStatus::Pending),
             _ => unreachable!(),

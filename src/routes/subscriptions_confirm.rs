@@ -1,10 +1,11 @@
 //! src/routes/subscriptions_confirm.rs
 
 use axum::extract::{Query, State};
+use deadpool_postgres::Pool;
 use hyper::StatusCode;
 use uuid::Uuid;
 
-use crate::{connection_pool::ConnectionPool, startup::AppState};
+use crate::startup::AppState;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Parameters {
@@ -46,7 +47,7 @@ pub async fn confirm(
     skip(subscription_token, pool)
 )]
 async fn get_subscriber_id_from_token(
-    pool: &ConnectionPool,
+    pool: &Pool,
     subscription_token: &str,
 ) -> Result<Uuid, String> {
     let result = pool.get().await.map_err(|e| e.to_string() )?.query(r#"SELECT subscriber_id FROM subscription_tokens WHERE subscription_token = $1"#, &[&subscription_token]).await.map_err(|e| e.to_string())?;
@@ -64,7 +65,7 @@ async fn get_subscriber_id_from_token(
     skip(subscriber_id, pool)
 )]
 async fn confirm_subscriber(
-    pool: &ConnectionPool,
+    pool: &Pool,
     subscriber_id: Uuid,
 ) -> Result<(), String> {
     let _ = pool

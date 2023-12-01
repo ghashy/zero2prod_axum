@@ -97,7 +97,7 @@ impl Settings {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DatabaseSettings {
     pub username: String,
     pub password: Secret<String>,
