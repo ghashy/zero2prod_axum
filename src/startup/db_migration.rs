@@ -1,19 +1,18 @@
-use bb8_postgres::PostgresConnectionManager;
+use std::ops::DerefMut;
+
+use deadpool_postgres::Pool;
 use refinery::embed_migrations;
 
 embed_migrations!("./migrations");
 
-pub(super) async fn run_migration(
-    postgres_connection: &bb8::Pool<
-        PostgresConnectionManager<tokio_postgres::NoTls>,
-    >,
-) {
-    let report = match migrations::runner()
-        .run_async(
-            &mut postgres_connection.dedicated_connection().await.unwrap(),
-        )
+pub(super) async fn run_migration(pool: &Pool) {
+    let mut connection = pool
+        .get()
         .await
-    {
+        .expect("Failed to get postgres pool connection to run migrations");
+    let client = connection.deref_mut().deref_mut();
+
+    let report = match migrations::runner().run_async(client).await {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("Can't run migration on db: {}", e);

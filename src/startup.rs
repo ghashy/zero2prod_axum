@@ -1,14 +1,14 @@
 use axum::routing;
 use axum::Router;
+use deadpool_postgres::Pool;
 use tokio::net::TcpListener;
 
 use axum::serve::Serve;
 
-use bb8_postgres::PostgresConnectionManager;
 use secrecy::ExposeSecret;
+use tokio_postgres::NoTls;
 
 use crate::configuration::Settings;
-use crate::connection_pool::ConnectionPool;
 use crate::email_client::EmailClient;
 use crate::routes::confirm;
 use crate::routes::get_hello;
@@ -29,7 +29,7 @@ pub struct Application {
 #[derive(Clone)]
 pub struct AppState {
     pub base_url: String,
-    pub pool: ConnectionPool,
+    pub pool: Pool,
     pub email_client: EmailClient,
 }
 
@@ -93,7 +93,7 @@ impl Application {
     fn build_server(
         base_url: &str,
         listener: TcpListener,
-        pool: ConnectionPool,
+        pool: Pool,
         email_client: EmailClient,
     ) -> Serve<Router, Router> {
         // We do not wrap pool into arc because internally it alreaday has an
@@ -125,13 +125,19 @@ impl Application {
 }
 
 /// Returns a connection pool to the PostgreSQL database.
-async fn get_postgres_connection_pool(
-    configuration: &Settings,
-) -> ConnectionPool {
-    let manager = PostgresConnectionManager::new_from_stringlike(
-        configuration.database.connection_string().expose_secret(),
-        tokio_postgres::NoTls,
-    )
-    .unwrap();
-    bb8::Pool::builder().build(manager).await.unwrap()
+async fn get_postgres_connection_pool(configuration: &Settings) -> Pool {
+    let mut config = deadpool_postgres::Config::new();
+    config.user = Some(configuration.database.username.clone());
+    config.dbname = Some(configuration.database.username.clone());
+    config.host = Some(configuration.database.host.clone());
+    config.password =
+        Some(configuration.database.password.expose_secret().clone());
+    let pool = config
+        .create_pool(Some(deadpool::Runtime::Tokio1), NoTls)
+        .expect("Failed to build postgres connection pool");
+    let _ = pool
+        .get()
+        .await
+        .expect("Failed to get postgres connection from pool");
+    pool
 }

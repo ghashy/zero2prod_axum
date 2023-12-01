@@ -1,4 +1,5 @@
 // Modules in folders
+mod cornucopia;
 mod routes;
 
 // Top-level modules
