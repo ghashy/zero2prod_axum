@@ -5,3 +5,5 @@ Cargo.lock
 /secrets
 /diagrams
 cornucopia.sh
+/ssl
+/db/center

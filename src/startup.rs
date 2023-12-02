@@ -1,12 +1,14 @@
 use axum::routing;
 use axum::Router;
+use deadpool_postgres::Manager;
+use deadpool_postgres::ManagerConfig;
 use deadpool_postgres::Pool;
+use native_tls::Identity;
 use tokio::net::TcpListener;
 
 use axum::serve::Serve;
 
 use secrecy::ExposeSecret;
-use tokio_postgres::NoTls;
 
 use crate::configuration::Settings;
 use crate::email_client::EmailClient;
@@ -103,22 +105,12 @@ impl Application {
             email_client,
             base_url: base_url.to_string(),
         };
-        let app =
-            Router::new()
-                .route("/health_check", routing::get(health_check))
-                .route("/hello", routing::get(get_hello))
-                .route("/subscriptions", routing::post(subscribe_handler))
-                .route("/subscriptions/confirm", routing::get(confirm))
-                // DEBUG:
-                .fallback(routing::get(
-                    |uri: axum::http::Uri,
-                     orig_uri: axum::extract::OriginalUri| async move {
-                        let uri = uri.path();
-                        let orig_uri = orig_uri.path();
-                        format!("uri: {}\norig_uri: {}", uri, orig_uri)
-                    },
-                ))
-                .with_state(app_state);
+        let app = Router::new()
+            .route("/health_check", routing::get(health_check))
+            .route("/hello", routing::get(get_hello))
+            .route("/subscriptions", routing::post(subscribe_handler))
+            .route("/subscriptions/confirm", routing::get(confirm))
+            .with_state(app_state);
 
         axum::serve(listener, app)
     }
@@ -126,18 +118,39 @@ impl Application {
 
 /// Returns a connection pool to the PostgreSQL database.
 async fn get_postgres_connection_pool(configuration: &Settings) -> Pool {
-    let mut config = deadpool_postgres::Config::new();
-    config.user = Some(configuration.database.username.clone());
-    config.dbname = Some(configuration.database.username.clone());
-    config.host = Some(configuration.database.host.clone());
-    config.password =
-        Some(configuration.database.password.expose_secret().clone());
-    let pool = config
-        .create_pool(Some(deadpool::Runtime::Tokio1), NoTls)
-        .expect("Failed to build postgres connection pool");
-    let _ = pool
-        .get()
-        .await
-        .expect("Failed to get postgres connection from pool");
+    let pg_config = get_pg_conf(configuration);
+    let connector = get_ssl_connector();
+    let manager_config = ManagerConfig {
+        recycling_method: deadpool_postgres::RecyclingMethod::Fast,
+    };
+    let manager = Manager::from_config(pg_config, connector, manager_config);
+    let pool = Pool::builder(manager).max_size(16).build().unwrap();
     pool
+}
+
+fn get_pg_conf(configuration: &Settings) -> tokio_postgres::Config {
+    let mut config = tokio_postgres::Config::new();
+    config.user(&configuration.database.username);
+    config.dbname(&configuration.database.database_name);
+    config.host(&configuration.database.host);
+    config.password(&configuration.database.password.expose_secret());
+    config
+}
+
+// IF PRODUCTION set domain name, if local, set danger accept
+fn get_ssl_connector() -> postgres_native_tls::MakeTlsConnector {
+    let root = std::fs::read("db/center/out/myCA.crt").unwrap();
+    let root = native_tls::Certificate::from_pem(&root).unwrap();
+    // let identity = std::fs::read("db/center/out/zero2prod_local.crt").unwrap();
+    // let identity_key =
+    // std::fs::read("db/center/out/zero2prod_local.key").unwrap();
+    // let identity = Identity::from_pkcs8(&identity, &identity_key).unwrap();
+    let connector = native_tls::TlsConnector::builder()
+        // .danger_accept_invalid_hostnames(true)
+        // .danger_accept_invalid_certs(true)
+        .add_root_certificate(root)
+        // .identity(identity)
+        .build()
+        .unwrap();
+    postgres_native_tls::MakeTlsConnector::new(connector)
 }

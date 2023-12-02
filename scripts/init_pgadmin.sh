@@ -5,5 +5,5 @@ docker run \
     --name pgadmin \
     --publish 80:80 \
     --env PGADMIN_DEFAULT_EMAIL=obsidian.musicwork@gmail.com \
-    --env PGADMIN_DEFAULT_PASSWORD=ghashy \
+    --env PGADMIN_DEFAULT_PASSWORD=password \
     --detach dpage/pgadmin4

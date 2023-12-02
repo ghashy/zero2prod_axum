@@ -227,8 +227,6 @@ async fn insert_subscriber_to_db<'a>(
     Ok(())
 }
 
-//──────────────────────────────────────────────────────────────────────────//
-
 #[tracing::instrument(
     name = "Store subscription token in the database"
     skip(subscription_token, transaction, )
