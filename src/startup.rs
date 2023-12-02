@@ -9,7 +9,9 @@ use tokio::net::TcpListener;
 use axum::serve::Serve;
 
 use secrecy::ExposeSecret;
+use tokio_postgres::NoTls;
 
+use crate::configuration::DatabaseSettings;
 use crate::configuration::Settings;
 use crate::email_client::EmailClient;
 use crate::routes::confirm;
@@ -44,7 +46,7 @@ impl Application {
         configuration: Settings,
     ) -> Result<Application, std::io::Error> {
         let postgres_connection =
-            get_postgres_connection_pool(&configuration).await;
+            get_postgres_connection_pool(&configuration.database).await;
 
         db_migration::run_migration(&postgres_connection).await;
 
@@ -117,9 +119,12 @@ impl Application {
 }
 
 /// Returns a connection pool to the PostgreSQL database.
-async fn get_postgres_connection_pool(configuration: &Settings) -> Pool {
+pub async fn get_postgres_connection_pool(
+    configuration: &DatabaseSettings,
+) -> Pool {
     let pg_config = get_pg_conf(configuration);
-    let connector = get_ssl_connector();
+    // let connector = get_ssl_connector();
+    let connector = NoTls;
     let manager_config = ManagerConfig {
         recycling_method: deadpool_postgres::RecyclingMethod::Fast,
     };
@@ -128,29 +133,25 @@ async fn get_postgres_connection_pool(configuration: &Settings) -> Pool {
     pool
 }
 
-fn get_pg_conf(configuration: &Settings) -> tokio_postgres::Config {
+fn get_pg_conf(configuration: &DatabaseSettings) -> tokio_postgres::Config {
     let mut config = tokio_postgres::Config::new();
-    config.user(&configuration.database.username);
-    config.dbname(&configuration.database.database_name);
-    config.host(&configuration.database.host);
-    config.password(&configuration.database.password.expose_secret());
+    config.user(&configuration.username);
+    config.dbname(&configuration.database_name);
+    config.host(&configuration.host);
+    config.password(&configuration.password.expose_secret());
     config
 }
 
-// IF PRODUCTION set domain name, if local, set danger accept
-fn get_ssl_connector() -> postgres_native_tls::MakeTlsConnector {
-    let root = std::fs::read("db/center/out/myCA.crt").unwrap();
-    let root = native_tls::Certificate::from_pem(&root).unwrap();
-    // let identity = std::fs::read("db/center/out/zero2prod_local.crt").unwrap();
-    // let identity_key =
-    // std::fs::read("db/center/out/zero2prod_local.key").unwrap();
-    // let identity = Identity::from_pkcs8(&identity, &identity_key).unwrap();
-    let connector = native_tls::TlsConnector::builder()
-        // .danger_accept_invalid_hostnames(true)
-        // .danger_accept_invalid_certs(true)
-        .add_root_certificate(root)
-        // .identity(identity)
-        .build()
-        .unwrap();
-    postgres_native_tls::MakeTlsConnector::new(connector)
-}
+// fn get_ssl_connector() -> postgres_native_tls::MakeTlsConnector {
+//     let root_file = std::fs::read("db/center/out/myCA.crt").unwrap();
+//     let root = native_tls::Certificate::from_pem(&root_file).unwrap();
+//     let mut builder = native_tls::TlsConnector::builder();
+//     builder.add_root_certificate(root);
+
+//     // Accept invalid host ssl only in development.
+//     #[cfg(debug_assertions)]
+//     let builder = builder.danger_accept_invalid_hostnames(true);
+
+//     let connector = builder.build().unwrap();
+//     postgres_native_tls::MakeTlsConnector::new(connector)
+// }

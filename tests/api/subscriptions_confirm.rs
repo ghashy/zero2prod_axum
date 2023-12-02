@@ -83,13 +83,13 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber_in_db() {
         .get()
         .await
         .unwrap()
-        .query("SELECT email, name, status FROM subscriptions WHERE name = \'john smit\'", &[])
+        .query_one("SELECT email, name, status FROM subscriptions WHERE name = \'john smit\'", &[])
         .await
         .unwrap();
 
-    assert_eq!(saved[0].get::<&str, &str>("email"), "johnsmit@gmail.com");
-    assert_eq!(saved[0].get::<&str, &str>("name"), "john smit");
-    assert_eq!(saved[0].get::<&str, &str>("status"), "confirmed");
+    assert_eq!(saved.get::<&str, &str>("email"), "johnsmit@gmail.com");
+    assert_eq!(saved.get::<&str, &str>("name"), "john smit");
+    assert_eq!(saved.get::<&str, &str>("status"), "confirmed");
 
     // REMOVE TEST DATA FROM THE DATABASE.
     let _ = app

@@ -7,7 +7,7 @@ use wiremock::MockServer;
 
 use zero2prod_axum::{
     configuration::{DatabaseSettings, Settings},
-    startup::Application,
+    startup::{get_postgres_connection_pool, Application},
 };
 
 /// This type contains MockServer, and it's address.
@@ -124,7 +124,8 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     TestApp {
         address,
         // This pool is separate from our app's pool
-        pool: spawn_postgres_pool(&db_config).await,
+        // pool: spawn_postgres_pool(&db_config).await,
+        pool: get_postgres_connection_pool(&db_config).await,
         email_server,
         port,
     }

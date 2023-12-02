@@ -18,12 +18,12 @@ RUN --mount=type=bind,source=src,target=src \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     --mount=type=bind,source=migrations,target=migrations \
     set -e && \
-    cargo build --locked --release --target x86_64-unknown-linux-gnu && \
-    cp ./target/x86_64-unknown-linux-gnu/release/$APP_NAME /app/$APP_NAME
+    cargo build --locked --release && \
+    cp ./target/release/$APP_NAME /app/$APP_NAME
 
 ################################################################################
 # Create a stage for running the application.
-FROM --platform=linux/amd64 debian:bookworm-slim AS final
+FROM debian:bookworm-slim AS final
 
 # Create a non-privileged user that the app will run under.
 ARG UID=10001

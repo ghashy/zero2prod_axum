@@ -35,7 +35,7 @@ async fn req_subscribe_returns_a_200_for_valid_form_data_and_subscriber_persists
         .get()
         .await
         .unwrap()
-        .query(
+        .query_one(
             "SELECT email, name, status FROM subscriptions WHERE name = 'hello world'",
             &[],
         )
@@ -43,9 +43,9 @@ async fn req_subscribe_returns_a_200_for_valid_form_data_and_subscriber_persists
         .expect("Failed to fetch saved subscription.");
 
     // CHECK IF ENTRY IN DB EXISTS
-    assert_eq!(saved[0].get::<&str, &str>("email"), "helloworld@gmail.com");
-    assert_eq!(saved[0].get::<&str, &str>("name"), "hello world");
-    assert_eq!(saved[0].get::<&str, &str>("status"), "pending_confirmation");
+    assert_eq!(saved.get::<&str, &str>("email"), "helloworld@gmail.com");
+    assert_eq!(saved.get::<&str, &str>("name"), "hello world");
+    assert_eq!(saved.get::<&str, &str>("status"), "pending_confirmation");
 
     // REMOVE TEST DATA FROM THE DATABASE.
     let _ = app

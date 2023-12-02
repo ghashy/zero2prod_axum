@@ -1,3 +1,8 @@
+# This is a BAD example, we should not store ssl certs in the container,
+# instead use encrypted docker network, store secrets on the volume,
+# or run PostgreSQL on the host without containerization.
+# This example exists only as reminder how to configure ssl certs for PostgreSQL.
+
 FROM postgres:16.1-alpine3.18
 
 COPY ./center/out/postgresdb.key /var/lib/postgresql
