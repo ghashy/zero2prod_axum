@@ -12,6 +12,7 @@ RUN apt update && apt install -y pkg-config libssl-dev gcc-x86-64-linux-gnu && \
 
 RUN --mount=type=bind,source=src,target=src \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
+    --mount=type=bind,source=templates,target=templates \
     --mount=type=bind,source=.cargo,target=.cargo \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
     --mount=type=cache,target=/app/target/ \
@@ -43,6 +44,7 @@ WORKDIR /app
 COPY --from=build /app/$APP_NAME /app/$APP_NAME
 COPY configuration/production.yaml ./configuration/production.yaml
 COPY migrations ./migrations
+COPY templates ./templates
 ENV APP_ENVIRONMENT production
 
 # Expose the port that the application listens on.

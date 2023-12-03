@@ -43,6 +43,45 @@ where C : GenericClient
         res.map(| row | (self.mapper) ((self.extractor) (& row)))) .into_stream() ;
         Ok(it)
     }
+}pub struct UuidUuidQuery < 'a, C : GenericClient, T, const N : usize >
+{
+    client : & 'a  C, params :
+    [& 'a (dyn postgres_types :: ToSql + Sync) ; N], stmt : & 'a mut cornucopia_async
+    :: private :: Stmt, extractor : fn(& tokio_postgres :: Row) -> uuid::Uuid,
+    mapper : fn(uuid::Uuid) -> T,
+} impl < 'a, C, T : 'a, const N : usize > UuidUuidQuery < 'a, C, T, N >
+where C : GenericClient
+{
+    pub fn map < R > (self, mapper : fn(uuid::Uuid) -> R) -> UuidUuidQuery
+    < 'a, C, R, N >
+    {
+        UuidUuidQuery
+        {
+            client : self.client, params : self.params, stmt : self.stmt,
+            extractor : self.extractor, mapper,
+        }
+    } pub async fn one(self) -> Result < T, tokio_postgres :: Error >
+    {
+        let stmt = self.stmt.prepare(self.client) .await ? ; let row =
+        self.client.query_one(stmt, & self.params) .await ? ;
+        Ok((self.mapper) ((self.extractor) (& row)))
+    } pub async fn all(self) -> Result < Vec < T >, tokio_postgres :: Error >
+    { self.iter() .await ?.try_collect().await } pub async fn opt(self) -> Result
+    < Option < T >, tokio_postgres :: Error >
+    {
+        let stmt = self.stmt.prepare(self.client) .await ? ;
+        Ok(self.client.query_opt(stmt, & self.params) .await
+        ?.map(| row | (self.mapper) ((self.extractor) (& row))))
+    } pub async fn iter(self,) -> Result < impl futures::Stream < Item = Result
+    < T, tokio_postgres :: Error >> + 'a, tokio_postgres :: Error >
+    {
+        let stmt = self.stmt.prepare(self.client) .await ? ; let it =
+        self.client.query_raw(stmt, cornucopia_async :: private ::
+        slice_iter(& self.params)) .await ?
+        .map(move | res |
+        res.map(| row | (self.mapper) ((self.extractor) (& row)))) .into_stream() ;
+        Ok(it)
+    }
 }pub struct I32Query < 'a, C : GenericClient, T, const N : usize >
 {
     client : & 'a  C, params :
@@ -170,6 +209,28 @@ String, 1 >
     {
         client, params : [email,], stmt : & mut self.0, extractor :
         | row | { row.get(0) }, mapper : | it | { it.into() },
+    }
+} }pub fn confirm_subscriber() -> ConfirmSubscriberStmt
+{ ConfirmSubscriberStmt(cornucopia_async :: private :: Stmt :: new("UPDATE subscriptions SET status = 'confirmed' WHERE id = $1 AND status = 'pending_confirmation'")) } pub
+struct ConfirmSubscriberStmt(cornucopia_async :: private :: Stmt) ; impl
+ConfirmSubscriberStmt { pub async fn bind < 'a, C : GenericClient, >
+(& 'a mut self, client : & 'a  C,
+sub_id : & 'a uuid::Uuid,) -> Result < u64, tokio_postgres :: Error >
+{
+    let stmt = self.0.prepare(client) .await ? ;
+    client.execute(stmt, & [sub_id,]) .await
+} }pub fn get_subscriber_id_from_token() -> GetSubscriberIdFromTokenStmt
+{ GetSubscriberIdFromTokenStmt(cornucopia_async :: private :: Stmt :: new("SELECT subscriber_id FROM subscription_tokens WHERE subscription_token = $1")) } pub
+struct GetSubscriberIdFromTokenStmt(cornucopia_async :: private :: Stmt) ; impl
+GetSubscriberIdFromTokenStmt { pub fn bind < 'a, C : GenericClient, T1 : cornucopia_async::StringSql,>
+(& 'a mut self, client : & 'a  C,
+sub_token : & 'a T1,) -> UuidUuidQuery < 'a, C,
+uuid::Uuid, 1 >
+{
+    UuidUuidQuery
+    {
+        client, params : [sub_token,], stmt : & mut self.0, extractor :
+        | row | { row.get(0) }, mapper : | it | { it },
     }
 } }pub fn get_countdown() -> GetCountdownStmt
 { GetCountdownStmt(cornucopia_async :: private :: Stmt :: new("WITH RECURSIVE countdown(val) AS (

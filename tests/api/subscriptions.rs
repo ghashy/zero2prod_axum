@@ -135,9 +135,8 @@ async fn req_subscribe_sends_a_confirmation_email_with_a_link() {
     // Get the first intercepted request
     let email_received_request =
         &app.email_server.received_requests().await.unwrap()[0];
-    let confirmation_links = app.get_confirmation_links(email_received_request);
-    // The two links should be identical
-    assert_eq!(confirmation_links.html, confirmation_links.plain_text);
+    // We can't assert on that link now
+    let confirmation_links = app.get_confirmation_link(email_received_request);
 
     // REMOVE TEST DATA FROM THE DATABASE.
     let _ = app

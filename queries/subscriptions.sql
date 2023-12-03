@@ -29,6 +29,12 @@ SELECT status
 FROM subscriptions
 WHERE email = :email;
 
+--! confirm_subscriber
+UPDATE subscriptions SET status = 'confirmed' WHERE id = :sub_id AND status = 'pending_confirmation';
+
+--! get_subscriber_id_from_token
+SELECT subscriber_id FROM subscription_tokens WHERE subscription_token = :sub_token;
+
 --! get_countdown
 WITH RECURSIVE countdown(val) AS (
     SELECT 10 AS val -- initial, non-recursive query

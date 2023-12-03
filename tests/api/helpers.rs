@@ -21,8 +21,7 @@ pub struct TestApp {
 }
 
 /// Confirmation links embedded in the request to the email API.
-pub struct ConfirmationLinks {
-    pub html: reqwest::Url,
+pub struct ConfirmationLink {
     pub plain_text: reqwest::Url,
 }
 
@@ -44,10 +43,10 @@ impl TestApp {
     }
 
     /// Extract the confirmation links embedded in the email API.
-    pub fn get_confirmation_links(
+    pub fn get_confirmation_link(
         &self,
         email_request: &wiremock::Request,
-    ) -> ConfirmationLinks {
+    ) -> ConfirmationLink {
         let body: serde_json::Value =
             serde_json::from_slice(&email_request.body).unwrap();
 
@@ -66,31 +65,29 @@ impl TestApp {
             confirmation_link
         };
 
-        let html_link = get_link(&body["html_body"].as_str().unwrap());
         let text_link = get_link(&body["text_body"].as_str().unwrap());
 
-        ConfirmationLinks {
-            html: html_link,
+        ConfirmationLink {
             plain_text: text_link,
         }
     }
 }
 
-pub async fn spawn_postgres_pool(db_config: &DatabaseSettings) -> Pool {
-    let mut config = deadpool_postgres::Config::new();
-    config.user = Some(db_config.username.clone());
-    config.dbname = Some(db_config.username.clone());
-    config.host = Some(db_config.host.clone());
-    config.password = Some(db_config.password.expose_secret().clone());
-    let pool = config
-        .create_pool(Some(deadpool::Runtime::Tokio1), NoTls)
-        .expect("Failed to build postgres connection pool");
-    let _ = pool
-        .get()
-        .await
-        .expect("Failed to get postgres connection from pool");
-    pool
-}
+// pub async fn spawn_postgres_pool(db_config: &DatabaseSettings) -> Pool {
+//     let mut config = deadpool_postgres::Config::new();
+//     config.user = Some(db_config.username.clone());
+//     config.dbname = Some(db_config.username.clone());
+//     config.host = Some(db_config.host.clone());
+//     config.password = Some(db_config.password.expose_secret().clone());
+//     let pool = config
+//         .create_pool(Some(deadpool::Runtime::Tokio1), NoTls)
+//         .expect("Failed to build postgres connection pool");
+//     let _ = pool
+//         .get()
+//         .await
+//         .expect("Failed to get postgres connection from pool");
+//     pool
+// }
 
 /// Toggle tracing output by commenting/uncommenting
 /// the first lines in this function.

@@ -1,10 +1,9 @@
+use askama::Template;
 use axum::extract::State;
 use axum::Form;
 
 use hyper::StatusCode;
 
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use serde::Deserialize;
 use time::OffsetDateTime;
 use tokio_postgres::error::SqlState;
@@ -15,6 +14,7 @@ use crate::cornucopia::queries::subscriptions;
 use crate::domain::NewSubscriber;
 use crate::email_client::EmailClient;
 use crate::startup::AppState;
+use crate::validation::subscriber_token::SubscriberToken;
 
 // TODO: WRITE HOW IT WORKS VERY DETAILED
 // 1. We get request with form: email, name. If not correct return BAD_REQUEST.
@@ -104,7 +104,7 @@ pub async fn subscribe_handler(
             }
         };
 
-    let subscription_token = generate_subscription_token();
+    let subscription_token = SubscriberToken::generate();
 
     match subscriber_status {
         SubscriberStatus::NonExisting => {
@@ -186,17 +186,19 @@ pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
     base_url: &str,
-    subscription_token: &str,
+    subscription_token: &SubscriberToken,
 ) -> Result<(), reqwest::Error> {
     let confirmation_link = format!(
         "{}/subscriptions/confirm?subscription_token={}",
-        base_url, subscription_token
+        base_url,
+        subscription_token.as_ref()
     );
-    let html_body = format!(
-        "Welcome to our newsletter!<br />\
-                Click <a href=\"{}\">here</a> to confirm your subscription.",
-        confirmation_link
-    );
+    let html_body = crate::html_template_gen::VerifyEmailTemplate::new(
+        new_subscriber.name.as_ref(),
+        &confirmation_link,
+    )
+    .render()
+    .unwrap();
     let plain_body = format!(
         "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
         confirmation_link
@@ -234,10 +236,10 @@ async fn insert_subscriber_to_db<'a>(
 async fn store_token<'a>(
     transaction: &mut Transaction<'a>,
     subscriber_id: Uuid,
-    subscription_token: &str,
+    subscription_token: &SubscriberToken,
 ) -> Result<(), tokio_postgres::Error> {
     subscriptions::insert_new_token()
-        .bind(transaction, &subscription_token, &subscriber_id)
+        .bind(transaction, &subscription_token.as_ref(), &subscriber_id)
         .await?;
     Ok(())
 }
@@ -249,14 +251,15 @@ async fn store_token<'a>(
 async fn update_token<'a>(
     transaction: &mut Transaction<'a>,
     email: &str,
-    subscription_token: &str,
+    subscription_token: &SubscriberToken,
 ) -> Result<(), tokio_postgres::Error> {
+    tracing::info!("Updating subscriber token in db...");
     let rows_modified = subscriptions::delete_token_by_email()
         .bind(transaction, &email)
         .await?;
     assert_eq!(rows_modified, 1);
     let rows_modified = subscriptions::insert_token_by_email()
-        .bind(transaction, &subscription_token, &email)
+        .bind(transaction, &subscription_token.as_ref(), &email)
         .await?;
     assert_eq!(rows_modified, 1);
     Ok(())
@@ -285,14 +288,4 @@ async fn get_subscriber_status<'a>(
     } else {
         Ok(SubscriberStatus::NonExisting)
     }
-}
-
-/// Using 25 characters we get roughly ~10^45 possible tokens -
-/// it should be more than enough for our use case.
-fn generate_subscription_token() -> String {
-    let mut rng = thread_rng();
-    std::iter::repeat_with(|| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(25)
-        .collect()
 }

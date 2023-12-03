@@ -1,11 +1,14 @@
 //! src/routes/subscriptions_confirm.rs
 
 use axum::extract::{Query, State};
-use deadpool_postgres::Pool;
+use deadpool_postgres::Client;
 use hyper::StatusCode;
 use uuid::Uuid;
 
-use crate::startup::AppState;
+use crate::{
+    cornucopia::queries::subscriptions, startup::AppState,
+    validation::subscriber_token::SubscriberToken,
+};
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Parameters {
@@ -20,19 +23,36 @@ pub async fn confirm(
     State(state): State<AppState>,
     Query(parameters): Query<Parameters>,
 ) -> StatusCode {
-    let subscriber_id = match get_subscriber_id_from_token(
-        &state.pool,
-        &parameters.subscription_token,
-    )
-    .await
-    {
-        Ok(id) => id,
+    let subscriber_token =
+        match SubscriberToken::parse(&parameters.subscription_token) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!("Failed to parse subscriber token {}", e);
+                return StatusCode::BAD_REQUEST;
+            }
+        };
+
+    let client = match state.pool.get().await {
+        Ok(c) => c,
         Err(e) => {
-            tracing::error!("Failed to load token from db, error: {e}");
+            tracing::error!("Failed to get db connection from pool: {e}");
             return StatusCode::INTERNAL_SERVER_ERROR;
         }
     };
-    if let Err(e) = confirm_subscriber(&state.pool, subscriber_id).await {
+
+    let subscriber_id =
+        match get_subscriber_id_from_token(&client, &subscriber_token).await {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                tracing::warn!("Attempt to confirm unexistent token");
+                return StatusCode::NOT_FOUND;
+            }
+            Err(e) => {
+                tracing::error!("Failed to load token from db, error: {e}");
+                return StatusCode::INTERNAL_SERVER_ERROR;
+            }
+        };
+    if let Err(e) = confirm_subscriber(&client, subscriber_id).await {
         tracing::error!(
             "Failed to change status to \'confirmed\' in db, error: {e}"
         );
@@ -44,39 +64,29 @@ pub async fn confirm(
 
 #[tracing::instrument(
     name = "Get subscriber_id from token",
-    skip(subscription_token, pool)
+    skip(subscription_token, client)
 )]
 async fn get_subscriber_id_from_token(
-    pool: &Pool,
-    subscription_token: &str,
-) -> Result<Uuid, String> {
-    let result = pool.get().await.map_err(|e| e.to_string() )?.query(r#"SELECT subscriber_id FROM subscription_tokens WHERE subscription_token = $1"#, &[&subscription_token]).await.map_err(|e| e.to_string())?;
-    let row = result
-        .get(0)
-        .ok_or(String::from("Failed to get [0] value from row after query"))?;
-    let subscriber_id = row
-        .try_get::<&str, Uuid>("subscriber_id")
-        .map_err(|e| e.to_string())?;
-    Ok(subscriber_id)
+    client: &Client,
+    subscription_token: &SubscriberToken,
+) -> Result<Option<Uuid>, tokio_postgres::Error> {
+    let id = subscriptions::get_subscriber_id_from_token()
+        .bind(client, &subscription_token.as_ref())
+        .opt()
+        .await?;
+    Ok(id)
 }
 
 #[tracing::instrument(
     name = "Mark subscriber as confirmed",
-    skip(subscriber_id, pool)
+    skip(subscriber_id, client)
 )]
 async fn confirm_subscriber(
-    pool: &Pool,
+    client: &Client,
     subscriber_id: Uuid,
-) -> Result<(), String> {
-    let _ = pool
-        .get()
-        .await
-        .map_err(|e| e.to_string())?
-        .query(
-            r#"UPDATE subscriptions SET status = 'confirmed' WHERE id = $1"#,
-            &[&subscriber_id],
-        )
-        .await
-        .map_err(|e| e.to_string())?;
+) -> Result<(), tokio_postgres::Error> {
+    subscriptions::confirm_subscriber()
+        .bind(client, &subscriber_id)
+        .await?;
     Ok(())
 }
