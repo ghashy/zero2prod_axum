@@ -49,5 +49,7 @@ rand = { version = "0.8.5", features = ["std_rng"] }
 # Dev dependencies are used exclusively when running test or examples
 # They do not get included in the final application binary!
 [dev-dependencies]
+# Sync version for testing purposes
+postgres = "0.19.7"
 wiremock = "0.5.21"
 fake = "2.9.1"

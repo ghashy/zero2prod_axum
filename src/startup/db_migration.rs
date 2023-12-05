@@ -5,7 +5,7 @@ use refinery::embed_migrations;
 
 embed_migrations!("./migrations");
 
-pub(super) async fn run_migration(pool: &Pool) {
+pub async fn run_migration(pool: &Pool) {
     let mut connection = pool
         .get()
         .await

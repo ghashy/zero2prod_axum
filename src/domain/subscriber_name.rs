@@ -8,7 +8,7 @@ impl SubscriberName {
         let is_empty_or_whitespace = name.trim().is_empty();
         let is_too_long = name.chars().count() > 256;
         let forbidden_characters =
-            ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
+            ['/', '(', ')', '"', '<', '>', '\\', '{', '}', ';', ':'];
         let contains_forbidden_chars =
             name.chars().any(|g| forbidden_characters.contains(&g));
 

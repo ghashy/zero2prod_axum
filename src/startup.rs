@@ -3,7 +3,7 @@ use axum::Router;
 use deadpool_postgres::Manager;
 use deadpool_postgres::ManagerConfig;
 use deadpool_postgres::Pool;
-use native_tls::Identity;
+// use native_tls::Identity;
 use tokio::net::TcpListener;
 
 use axum::serve::Serve;
@@ -19,7 +19,7 @@ use crate::routes::get_hello;
 use crate::routes::health_check;
 use crate::routes::subscribe_handler;
 
-mod db_migration;
+pub mod db_migration;
 
 /// This is a central type of our codebase. `Application` type builds server
 /// for both production and testing purposes.
@@ -46,7 +46,7 @@ impl Application {
         configuration: Settings,
     ) -> Result<Application, std::io::Error> {
         let postgres_connection =
-            get_postgres_connection_pool(&configuration.database).await;
+            get_postgres_connection_pool(&configuration.database);
 
         db_migration::run_migration(&postgres_connection).await;
 
@@ -119,9 +119,7 @@ impl Application {
 }
 
 /// Returns a connection pool to the PostgreSQL database.
-pub async fn get_postgres_connection_pool(
-    configuration: &DatabaseSettings,
-) -> Pool {
+pub fn get_postgres_connection_pool(configuration: &DatabaseSettings) -> Pool {
     let pg_config = get_pg_conf(configuration);
     // let connector = get_ssl_connector();
     let connector = NoTls;

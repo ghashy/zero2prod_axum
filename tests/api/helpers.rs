@@ -1,7 +1,7 @@
 //! This is a module with common initialization functions.
 
 use deadpool_postgres::Pool;
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, Secret};
 use tokio_postgres::NoTls;
 use wiremock::MockServer;
 
@@ -14,6 +14,8 @@ use zero2prod_axum::{
 /// MockServer represents a email delivery service,
 /// such as Postmark.
 pub struct TestApp {
+    db_username: String,
+    db_config_with_root_cred: DatabaseSettings,
     pub address: String,
     pub pool: Pool,
     pub email_server: MockServer,
@@ -73,22 +75,6 @@ impl TestApp {
     }
 }
 
-// pub async fn spawn_postgres_pool(db_config: &DatabaseSettings) -> Pool {
-//     let mut config = deadpool_postgres::Config::new();
-//     config.user = Some(db_config.username.clone());
-//     config.dbname = Some(db_config.username.clone());
-//     config.host = Some(db_config.host.clone());
-//     config.password = Some(db_config.password.expose_secret().clone());
-//     let pool = config
-//         .create_pool(Some(deadpool::Runtime::Tokio1), NoTls)
-//         .expect("Failed to build postgres connection pool");
-//     let _ = pool
-//         .get()
-//         .await
-//         .expect("Failed to get postgres connection from pool");
-//     pool
-// }
-
 /// Toggle tracing output by commenting/uncommenting
 /// the first lines in this function.
 pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
@@ -99,14 +85,48 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     // let _ = tracing::subscriber::set_global_default(subscriber);
 
     // We should randomize app port
-    config.app_port = 0;
+    let mut db_config = config.database.clone();
+
+    // Connect as an admin user
+    let pool = get_postgres_connection_pool(&db_config);
+    let db_username = generate_username();
+
+    // Create new random user account in pg
+    let create_role =
+        format!("CREATE ROLE {0} WITH LOGIN PASSWORD '{0}';", &db_username);
+    let create_schema =
+        format!("CREATE SCHEMA {0} AUTHORIZATION {0};", &db_username);
+    pool.get()
+        .await
+        .unwrap()
+        .simple_query(&create_role)
+        .await
+        .unwrap();
+    pool.get()
+        .await
+        .unwrap()
+        .simple_query(&create_schema)
+        .await
+        .unwrap();
+
+    drop(pool);
+    db_config.username = db_username.clone();
+    db_config.password = Secret::new(db_username.clone());
+
+    // Connect as a new user
+    let pool = get_postgres_connection_pool(&db_config);
 
     let email_server = MockServer::start().await;
 
     // Set base_url to our MockServer instead of real email delivery service.
     config.email_client.base_url = email_server.uri();
+    config.app_port = 0;
+    // For Drop
+    let db_config_with_root_cred = config.database.clone();
 
-    let db_config = config.database.clone();
+    // Store db_config with test user in config destined for Application::build
+    config.database = db_config;
+
     let application = Application::build(config)
         .await
         .expect("Failed to build application");
@@ -119,11 +139,53 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
+        db_username,
+        db_config_with_root_cred,
         address,
-        // This pool is separate from our app's pool
-        // pool: spawn_postgres_pool(&db_config).await,
-        pool: get_postgres_connection_pool(&db_config).await,
+        pool,
         email_server,
         port,
     }
+}
+
+impl Drop for TestApp {
+    fn drop(&mut self) {
+        // Clean pg
+        let db_config = self.db_config_with_root_cred.clone();
+        let db_username = self.db_username.clone();
+        // Spawn a new thread, because internally sync postgres client uses
+        // tokio runtime, but we are already in tokio runtime here. To
+        // spawn a new tokio runtime, we should do it inside new thread.
+        let _ = std::thread::spawn(move || {
+            let mut client = get_sync_postgres_client(&db_config);
+            let create_role = format!("DROP SCHEMA {0} CASCADE;", db_username);
+            let create_schema = format!("DROP ROLE {0};", db_username);
+            client.simple_query(&create_role).unwrap();
+            client.simple_query(&create_schema).unwrap();
+        })
+        .join();
+    }
+}
+
+pub fn generate_username() -> String {
+    let mut rng = rand::thread_rng();
+    format!(
+        "test_{}",
+        std::iter::repeat_with(|| {
+            rand::Rng::sample(&mut rng, rand::distributions::Alphanumeric)
+        })
+        .map(|b| char::from(b).to_lowercase().next().unwrap())
+        .take(5)
+        .collect::<String>()
+    )
+}
+
+pub fn get_sync_postgres_client(
+    configuration: &DatabaseSettings,
+) -> postgres::Client {
+    postgres::Client::connect(
+        configuration.connection_string().expose_secret(),
+        NoTls,
+    )
+    .unwrap()
 }

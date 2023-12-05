@@ -136,7 +136,7 @@ async fn req_subscribe_sends_a_confirmation_email_with_a_link() {
     let email_received_request =
         &app.email_server.received_requests().await.unwrap()[0];
     // We can't assert on that link now
-    let confirmation_links = app.get_confirmation_link(email_received_request);
+    let _confirmation_links = app.get_confirmation_link(email_received_request);
 
     // REMOVE TEST DATA FROM THE DATABASE.
     let _ = app
