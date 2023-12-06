@@ -5,8 +5,10 @@ async fn main() {
     let subscriber = tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::ChronoLocal::default())
         .with_max_level(tracing::Level::INFO)
+        .compact()
         .with_level(true)
         .finish();
+
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set up tracing");
 

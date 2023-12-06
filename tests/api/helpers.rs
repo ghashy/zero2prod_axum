@@ -30,7 +30,7 @@ pub struct ConfirmationLink {
 impl TestApp {
     /// This function sends Post request to our TestApp,
     /// to /subscriptions path. If successful, it will create
-    /// and delete line in postgres db.
+    /// a line in postgres db.
     pub async fn post_subscriptions(
         &self,
         body: &'static str,
@@ -81,7 +81,7 @@ pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .without_time()
-        .pretty()
+        .compact()
         .with_level(true)
         .finish();
     let _ = tracing::subscriber::set_global_default(subscriber);
