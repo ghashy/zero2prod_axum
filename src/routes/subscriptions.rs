@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::cornucopia::queries::subscriptions;
 use crate::domain::NewSubscriber;
 use crate::email_client::EmailClient;
+use crate::error_chain_fmt;
 use crate::startup::AppState;
 use crate::validation::subscriber_token::SubscriberToken;
 
@@ -36,19 +37,6 @@ enum SubscriberStatus {
     NonExisting,
     Pending,
     Confirmed,
-}
-
-fn error_chain_fmt(
-    e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    writeln!(f, "{}\n", e)?;
-    let mut current = e.source();
-    while let Some(cause) = current {
-        writeln!(f, "Caused by:\n\t{}", cause)?;
-        current = cause.source();
-    }
-    Ok(())
 }
 
 #[derive(thiserror::Error)]

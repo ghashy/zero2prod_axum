@@ -17,7 +17,7 @@ use crate::email_client::EmailClient;
 use crate::routes::confirm;
 use crate::routes::get_hello;
 use crate::routes::health_check;
-use crate::routes::publish_nwesletter;
+use crate::routes::publish_newsletters;
 use crate::routes::subscribe_handler;
 
 pub mod db_migration;
@@ -114,7 +114,7 @@ impl Application {
             .route("/hello", routing::get(get_hello))
             .route("/subscriptions", routing::post(subscribe_handler))
             .route("/subscriptions/confirm", routing::get(confirm))
-            .route("/newsletters", routing::post(publish_nwesletter))
+            .route("/newsletters", routing::post(publish_newsletters))
             .with_state(app_state);
 
         axum::serve(listener, app)

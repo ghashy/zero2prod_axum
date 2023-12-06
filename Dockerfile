@@ -7,8 +7,8 @@ FROM rust:${RUST_VERSION}-slim-bookworm AS build
 ARG APP_NAME
 WORKDIR /app
 
-RUN apt update && apt install -y pkg-config libssl-dev gcc-x86-64-linux-gnu && \
-    rustup target add x86_64-unknown-linux-gnu
+# RUN apt update && apt install -y pkg-config libssl-dev gcc-x86-64-linux-gnu && \
+    # rustup target add x86_64-unknown-linux-gnu
 
 RUN --mount=type=bind,source=src,target=src \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \

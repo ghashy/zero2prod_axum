@@ -23,9 +23,7 @@ pub struct TestApp {
 }
 
 /// Confirmation links embedded in the request to the email API.
-pub struct ConfirmationLink {
-    pub plain_text: reqwest::Url,
-}
+pub struct ConfirmationLink(pub reqwest::Url);
 
 impl TestApp {
     /// This function sends Post request to our TestApp,
@@ -67,24 +65,36 @@ impl TestApp {
             confirmation_link
         };
 
-        let text_link = get_link(&body["text_body"].as_str().unwrap());
+        let link = get_link(&body["text_body"].as_str().unwrap());
 
-        ConfirmationLink {
-            plain_text: text_link,
-        }
+        ConfirmationLink(link)
+    }
+
+    pub async fn post_newsletters(
+        &self,
+        body: serde_json::Value,
+    ) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/newsletters", self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
     }
 }
 
 /// Toggle tracing output by commenting/uncommenting
 /// the first lines in this function.
 pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .without_time()
-        .compact()
-        .with_level(true)
-        .finish();
-    let _ = tracing::subscriber::set_global_default(subscriber);
+    if let Ok(_) = std::env::var("TEST_TRACING") {
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .without_time()
+            .compact()
+            .with_level(true)
+            .finish();
+        let _ = tracing::subscriber::set_global_default(subscriber);
+    }
 
     // We should randomize app port
     let mut db_config = config.database.clone();
