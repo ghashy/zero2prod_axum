@@ -5,6 +5,7 @@ use hyper::Request;
 use hyper::StatusCode;
 
 pub async fn health_check(_: Request<Body>) -> impl IntoResponse {
+    tracing::info!("Healthy!");
     StatusCode::OK
 }
 

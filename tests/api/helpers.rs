@@ -78,11 +78,13 @@ impl TestApp {
 /// Toggle tracing output by commenting/uncommenting
 /// the first lines in this function.
 pub async fn spawn_app_locally(mut config: Settings) -> TestApp {
-    // let subscriber = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::INFO)
-    //     .with_level(true)
-    //     .finish();
-    // let _ = tracing::subscriber::set_global_default(subscriber);
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .without_time()
+        .pretty()
+        .with_level(true)
+        .finish();
+    let _ = tracing::subscriber::set_global_default(subscriber);
 
     // We should randomize app port
     let mut db_config = config.database.clone();

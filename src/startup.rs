@@ -70,6 +70,7 @@ impl Application {
 
         let address =
             format!("{}:{}", configuration.app_addr, configuration.app_port);
+        tracing::info!("running on {} address", address);
         let listener = TcpListener::bind(address).await?;
         let port = listener.local_addr()?.port();
 

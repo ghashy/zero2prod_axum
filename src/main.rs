@@ -11,6 +11,7 @@ async fn main() {
         .expect("Failed to set up tracing");
 
     let config = Settings::load_configuration_from_env().unwrap();
+    // let config = Settings::load_configuration().unwrap();
 
     if let Err(e) = Application::build(config)
         .await
