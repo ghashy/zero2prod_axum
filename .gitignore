@@ -7,3 +7,4 @@ Cargo.lock
 cornucopia.sh
 /ssl
 /db/center
+refinery.toml

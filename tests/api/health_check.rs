@@ -4,13 +4,13 @@
 
 use zero2prod_axum::configuration::Settings;
 
-use crate::helpers::spawn_app_locally;
+use crate::helpers::TestApp;
 
 #[tokio::test]
 async fn health_check_test() {
     let config = Settings::load_configuration().unwrap();
 
-    let app = spawn_app_locally(config).await;
+    let app = TestApp::spawn_app(config).await;
 
     // We need to bring in `reqwest`
     // to perform HTTP requests against our application.

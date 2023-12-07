@@ -5,12 +5,12 @@ use wiremock::{
 };
 use zero2prod_axum::configuration::Settings;
 
-use crate::helpers::spawn_app_locally;
+use crate::helpers::TestApp;
 
 #[tokio::test]
 async fn confirmations_without_token_are_rejected_with_a_400() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
 
     // Act
     let response =
@@ -25,7 +25,7 @@ async fn confirmations_without_token_are_rejected_with_a_400() {
 #[tokio::test]
 async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
     let body = "name=confirm%20name&email=confirmname%40gmail.com";
 
     Mock::given(path("/email"))
@@ -57,7 +57,7 @@ async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
 #[tokio::test]
 async fn clicking_on_the_confirmation_link_confirms_a_subscriber_in_db() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
     let body = "name=john%20smit&email=johnsmit%40gmail.com";
 
     Mock::given(path("/email"))

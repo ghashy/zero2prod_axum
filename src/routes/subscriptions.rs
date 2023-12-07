@@ -1,4 +1,3 @@
-use anyhow::Context;
 use askama::Template;
 use axum::extract::State;
 use axum::Form;
@@ -40,6 +39,7 @@ enum SubscriberStatus {
 }
 
 #[derive(thiserror::Error)]
+#[allow(dead_code)]
 pub enum SubscribeError {
     #[error("{0}")]
     ValidationError(String),

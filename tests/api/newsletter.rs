@@ -1,6 +1,6 @@
 //! tests/api/newsletter.rs
 
-use crate::helpers::{spawn_app_locally, ConfirmationLink, TestApp};
+use crate::helpers::{ConfirmationLink, TestApp};
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, ResponseTemplate};
 use zero2prod_axum::configuration::Settings;
@@ -8,7 +8,7 @@ use zero2prod_axum::configuration::Settings;
 #[tokio::test]
 async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
     create_unconfirmed_subscriber(&app).await;
 
     Mock::given(any())
@@ -39,7 +39,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 #[tokio::test]
 async fn newsletter_are_delivered_to_confirmed_subscribers() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
     create_confirmed_subscriber(&app).await;
 
     Mock::given(path("/email"))
@@ -67,7 +67,7 @@ async fn newsletter_are_delivered_to_confirmed_subscribers() {
 #[tokio::test]
 async fn newsletters_returns_422_for_invalid_data() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
     let test_cases = vec![
         (
             serde_json::json!({
@@ -98,7 +98,7 @@ async fn newsletters_returns_422_for_invalid_data() {
 #[tokio::test]
 async fn requests_missing_authorization_are_rejected() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
 
     let response = reqwest::Client::new()
         .post(&format!("{}/newsletters", &app.address))

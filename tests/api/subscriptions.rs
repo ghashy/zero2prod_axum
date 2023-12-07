@@ -1,13 +1,14 @@
-use crate::helpers::spawn_app_locally;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 use zero2prod_axum::configuration::Settings;
+
+use crate::helpers::TestApp;
 
 #[tokio::test]
 async fn req_subscribe_returns_a_200_for_valid_form_data_and_subscriber_persists_in_db(
 ) {
     let config = Settings::load_configuration().unwrap();
-    let app = spawn_app_locally(config).await;
+    let app = TestApp::spawn_app(config).await;
 
     let body = "name=hello%20world&email=helloworld%40gmail.com";
 
@@ -61,7 +62,7 @@ async fn req_subscribe_returns_a_200_for_valid_form_data_and_subscriber_persists
 #[tokio::test]
 async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
     let config = Settings::load_configuration().unwrap();
-    let app = spawn_app_locally(config).await;
+    let app = TestApp::spawn_app(config).await;
 
     let test_cases = vec![
         ("name=&email=ursula_le_guin%40gmail.com", "emtpy name"),
@@ -84,7 +85,7 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
 #[tokio::test]
 async fn subscribe_returns_a_422_when_data_is_missing() {
     let config = Settings::load_configuration().unwrap();
-    let app = spawn_app_locally(config).await;
+    let app = TestApp::spawn_app(config).await;
 
     let test_cases = vec![
         ("name=le%guin", "missing the email"),
@@ -116,7 +117,7 @@ async fn req_subscribe_sends_a_confirmation_email_with_a_link() {
     let config = Settings::load_configuration().unwrap();
 
     // Arrange
-    let app = spawn_app_locally(config).await;
+    let app = TestApp::spawn_app(config).await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     Mock::given(path("/email"))
@@ -154,7 +155,7 @@ async fn req_subscribe_sends_a_confirmation_email_with_a_link() {
 #[tokio::test]
 async fn req_subscribe_fails_if_there_is_a_fatal_database_error() {
     // Arrange
-    let app = spawn_app_locally(Settings::load_configuration().unwrap()).await;
+    let app = TestApp::spawn_app(Settings::load_configuration().unwrap()).await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     // Sabotage the database
