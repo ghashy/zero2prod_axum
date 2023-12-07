@@ -1,4 +1,5 @@
 use anyhow::Context;
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -102,7 +103,15 @@ pub async fn publish_newsletters(
         }
     };
 
-    let user_id = validate_credentials(credentials, &connection).await?;
+    let user_id = match validate_credentials(credentials, &connection).await {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Error: {e}");
+            return Err(PublishError::UnexpectedError(anyhow::anyhow!(
+                "Error: {e}"
+            )));
+        }
+    };
 
     tracing::Span::current()
         .record("user_id", &tracing::field::display(&user_id));
@@ -186,19 +195,38 @@ fn basic_authentication(
     })
 }
 
+// You might have also noticed that we no longer deal with the
+// salt directly - PHC string format takes care of it for us, implicitly.
 async fn validate_credentials(
     Credentials { username, password }: Credentials,
     client: &Client,
 ) -> Result<uuid::Uuid, PublishError> {
-    use sha3::Digest;
-    let password_hash =
-        sha3::Sha3_256::digest(password.expose_secret().as_bytes());
-    // Lowercase hexadecimal encoding.
-    let password_hash = format!("{:x}", password_hash);
-    query_user_id_by_credentials()
-        .bind(client, &username, &password_hash)
+    let (user_id, expected_password_hash) = match query_user_id_by_credentials()
+        .bind(client, &username)
         .one()
         .await
         .context("Failed to perform a query to validate auth credentials.")
         .map_err(PublishError::UnexpectedError)
+    {
+        Ok(query) => (query.user_id, query.password_hash),
+        Err(e) => {
+            return Err(PublishError::AuthError(anyhow::anyhow!(
+                "Unknown username: {e}"
+            )))
+        }
+    };
+
+    let expected_password_hash = PasswordHash::new(&expected_password_hash)
+        .context("Failed to parse hash in PHC string format.")
+        .map_err(PublishError::UnexpectedError)?;
+
+    Argon2::default()
+        .verify_password(
+            password.expose_secret().as_bytes(),
+            &expected_password_hash,
+        )
+        .context("Invalid password.")
+        .map_err(PublishError::AuthError)?;
+
+    Ok(user_id)
 }

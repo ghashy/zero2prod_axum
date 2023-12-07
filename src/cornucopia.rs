@@ -4,7 +4,7 @@
 #[allow(unused_imports)] #[allow(dead_code)] pub mod types { }#[allow(clippy :: all, clippy :: pedantic)] #[allow(unused_variables)]
 #[allow(unused_imports)] #[allow(dead_code)] pub mod queries
 { pub mod newsletters
-{ use futures::{{StreamExt, TryStreamExt}};use futures; use cornucopia_async::GenericClient;#[derive( Debug)] pub struct QueryUserIdByCredentialsParams < T1 : cornucopia_async::StringSql,T2 : cornucopia_async::StringSql,> { pub name : T1,pub pass : T2,}pub struct StringQuery < 'a, C : GenericClient, T, const N : usize >
+{ use futures::{{StreamExt, TryStreamExt}};use futures; use cornucopia_async::GenericClient;pub struct StringQuery < 'a, C : GenericClient, T, const N : usize >
 {
     client : & 'a  C, params :
     [& 'a (dyn postgres_types :: ToSql + Sync) ; N], stmt : & 'a mut cornucopia_async
@@ -43,19 +43,27 @@ where C : GenericClient
         res.map(| row | (self.mapper) ((self.extractor) (& row)))) .into_stream() ;
         Ok(it)
     }
-}pub struct UuidUuidQuery < 'a, C : GenericClient, T, const N : usize >
+}#[derive( Debug, Clone, PartialEq, )] pub struct QueryUserIdByCredentials
+{ pub user_id : uuid::Uuid,pub password_hash : String,}pub struct QueryUserIdByCredentialsBorrowed < 'a >
+{ pub user_id : uuid::Uuid,pub password_hash : &'a str,} impl < 'a > From < QueryUserIdByCredentialsBorrowed <
+'a >> for QueryUserIdByCredentials
+{
+    fn
+    from(QueryUserIdByCredentialsBorrowed { user_id,password_hash,} : QueryUserIdByCredentialsBorrowed < 'a >)
+    -> Self { Self { user_id,password_hash: password_hash.into(),} }
+}pub struct QueryUserIdByCredentialsQuery < 'a, C : GenericClient, T, const N : usize >
 {
     client : & 'a  C, params :
     [& 'a (dyn postgres_types :: ToSql + Sync) ; N], stmt : & 'a mut cornucopia_async
-    :: private :: Stmt, extractor : fn(& tokio_postgres :: Row) -> uuid::Uuid,
-    mapper : fn(uuid::Uuid) -> T,
-} impl < 'a, C, T : 'a, const N : usize > UuidUuidQuery < 'a, C, T, N >
+    :: private :: Stmt, extractor : fn(& tokio_postgres :: Row) -> QueryUserIdByCredentialsBorrowed,
+    mapper : fn(QueryUserIdByCredentialsBorrowed) -> T,
+} impl < 'a, C, T : 'a, const N : usize > QueryUserIdByCredentialsQuery < 'a, C, T, N >
 where C : GenericClient
 {
-    pub fn map < R > (self, mapper : fn(uuid::Uuid) -> R) -> UuidUuidQuery
+    pub fn map < R > (self, mapper : fn(QueryUserIdByCredentialsBorrowed) -> R) -> QueryUserIdByCredentialsQuery
     < 'a, C, R, N >
     {
-        UuidUuidQuery
+        QueryUserIdByCredentialsQuery
         {
             client : self.client, params : self.params, stmt : self.stmt,
             extractor : self.extractor, mapper,
@@ -98,30 +106,21 @@ String, 0 >
         | row | { row.get(0) }, mapper : | it | { it.into() },
     }
 } }pub fn query_user_id_by_credentials() -> QueryUserIdByCredentialsStmt
-{ QueryUserIdByCredentialsStmt(cornucopia_async :: private :: Stmt :: new("SELECT user_id
+{ QueryUserIdByCredentialsStmt(cornucopia_async :: private :: Stmt :: new("SELECT user_id, password_hash
 FROM users
-WHERE username = $1 AND password_hash = $2")) } pub
+WHERE username = $1")) } pub
 struct QueryUserIdByCredentialsStmt(cornucopia_async :: private :: Stmt) ; impl
-QueryUserIdByCredentialsStmt { pub fn bind < 'a, C : GenericClient, T1 : cornucopia_async::StringSql,T2 : cornucopia_async::StringSql,>
+QueryUserIdByCredentialsStmt { pub fn bind < 'a, C : GenericClient, T1 : cornucopia_async::StringSql,>
 (& 'a mut self, client : & 'a  C,
-name : & 'a T1,pass : & 'a T2,) -> UuidUuidQuery < 'a, C,
-uuid::Uuid, 2 >
+name : & 'a T1,) -> QueryUserIdByCredentialsQuery < 'a, C,
+QueryUserIdByCredentials, 1 >
 {
-    UuidUuidQuery
+    QueryUserIdByCredentialsQuery
     {
-        client, params : [name,pass,], stmt : & mut self.0, extractor :
-        | row | { row.get(0) }, mapper : | it | { it },
+        client, params : [name,], stmt : & mut self.0, extractor :
+        | row | { QueryUserIdByCredentialsBorrowed { user_id : row.get(0),password_hash : row.get(1),} }, mapper : | it | { <QueryUserIdByCredentials>::from(it) },
     }
-} }impl < 'a, C : GenericClient, T1 : cornucopia_async::StringSql,T2 : cornucopia_async::StringSql,> cornucopia_async ::
-Params < 'a, QueryUserIdByCredentialsParams < T1,T2,>, UuidUuidQuery < 'a,
-C, uuid::Uuid, 2 >, C > for QueryUserIdByCredentialsStmt
-{
-    fn
-    params(& 'a mut self, client : & 'a  C, params : & 'a
-    QueryUserIdByCredentialsParams < T1,T2,>) -> UuidUuidQuery < 'a, C,
-    uuid::Uuid, 2 >
-    { self.bind(client, & params.name,& params.pass,) }
-}}pub mod subscriptions
+} }}pub mod subscriptions
 { use futures::{{StreamExt, TryStreamExt}};use futures; use cornucopia_async::GenericClient;#[derive( Debug)] pub struct InsertNewSubscriptionParams < T1 : cornucopia_async::StringSql,T2 : cornucopia_async::StringSql,> { pub id : uuid::Uuid,pub email : T1,pub name : T2,pub subscribed_at : time::OffsetDateTime,}#[derive( Debug)] pub struct InsertNewTokenParams < T1 : cornucopia_async::StringSql,> { pub subscription_token : T1,pub subscriber_id : uuid::Uuid,}#[derive( Debug)] pub struct InsertTokenByEmailParams < T1 : cornucopia_async::StringSql,T2 : cornucopia_async::StringSql,> { pub token : T1,pub email : T2,}pub struct StringQuery < 'a, C : GenericClient, T, const N : usize >
 {
     client : & 'a  C, params :

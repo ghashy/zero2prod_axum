@@ -1,5 +1,6 @@
 //! This is a module with common initialization functions.
 
+use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use deadpool_postgres::{Client, Pool};
 use secrecy::{ExposeSecret, Secret};
 use sha3::Digest;
@@ -28,9 +29,13 @@ impl TestUser {
     }
 
     async fn store_in_db(&self, client: &Client) {
-        let password_hash = sha3::Sha3_256::digest(self.password.as_bytes());
-        // Lowercase hexadecimal encoding.
-        let password_hash = format!("{:x}", password_hash);
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        // We don't care about the exact Argon2 parameters here
+        // given that it's for testing purposes!
+        let password_hash = Argon2::default()
+            .hash_password(self.password.as_bytes(), &salt)
+            .unwrap()
+            .to_string();
         client
             .execute(
                 "INSERT INTO users (user_id, username, password_hash)
