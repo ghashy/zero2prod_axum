@@ -43,20 +43,17 @@ impl Application {
     ///
     /// This functions builds a new `Application` with given configuration.
     /// It also configures a pool of connections to the PostgreSQL database.
-    pub async fn build(
-        configuration: Settings,
-    ) -> Result<Application, std::io::Error> {
-        let postgres_connection =
-            get_postgres_connection_pool(&configuration.database);
+    pub async fn build(configuration: Settings) -> Result<Application, std::io::Error> {
+        let postgres_connection = get_postgres_connection_pool(&configuration.database);
 
         db_migration::run_migration(&postgres_connection).await;
 
         let timeout = configuration.email_client.timeout_millis();
 
-        let sender_email =
-            configuration.email_client.sender().map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-            })?;
+        let sender_email = configuration
+            .email_client
+            .sender()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         let email_client = EmailClient::new(
             configuration.email_client.base_url,
@@ -65,12 +62,9 @@ impl Application {
             timeout,
             configuration.email_delivery_service,
         )
-        .map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-        })?;
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
-        let address =
-            format!("{}:{}", configuration.app_addr, configuration.app_port);
+        let address = format!("{}:{}", configuration.app_addr, configuration.app_port);
         tracing::info!("running on {} address", address);
         let listener = TcpListener::bind(address).await?;
         let port = listener.local_addr()?.port();

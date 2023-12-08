@@ -7,10 +7,8 @@ impl SubscriberName {
     pub fn parse(name: &str) -> Result<SubscriberName, &'static str> {
         let is_empty_or_whitespace = name.trim().is_empty();
         let is_too_long = name.chars().count() > 256;
-        let forbidden_characters =
-            ['/', '(', ')', '"', '<', '>', '\\', '{', '}', ';', ':'];
-        let contains_forbidden_chars =
-            name.chars().any(|g| forbidden_characters.contains(&g));
+        let forbidden_characters = ['/', '(', ')', '"', '<', '>', '\\', '{', '}', ';', ':'];
+        let contains_forbidden_chars = name.chars().any(|g| forbidden_characters.contains(&g));
 
         if is_empty_or_whitespace {
             Err("String is emtpy")

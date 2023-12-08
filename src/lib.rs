@@ -6,6 +6,7 @@ pub mod email_client;
 pub mod html_template_gen;
 mod routes;
 pub mod startup;
+pub mod telemetry;
 pub mod validation;
 
 pub fn error_chain_fmt(

@@ -7,8 +7,7 @@ impl SubscriberToken {
     pub fn parse(name: &str) -> Result<SubscriberToken, &'static str> {
         let is_empty_or_whitespace = name.trim().is_empty();
         let is_too_long = name.chars().count() != 25;
-        let contains_forbidden_chars =
-            name.chars().any(|c| !c.is_alphanumeric());
+        let contains_forbidden_chars = name.chars().any(|c| !c.is_alphanumeric());
 
         if is_empty_or_whitespace {
             Err("String is emtpy")

@@ -1,9 +1,8 @@
 //! This is a module with common initialization functions.
 
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+use argon2::{password_hash::SaltString, Argon2, Params, PasswordHasher};
 use deadpool_postgres::{Client, Pool};
 use secrecy::{ExposeSecret, Secret};
-use sha3::Digest;
 use tokio_postgres::NoTls;
 use uuid::Uuid;
 use wiremock::MockServer;
@@ -32,10 +31,14 @@ impl TestUser {
         let salt = SaltString::generate(&mut rand::thread_rng());
         // We don't care about the exact Argon2 parameters here
         // given that it's for testing purposes!
-        let password_hash = Argon2::default()
-            .hash_password(self.password.as_bytes(), &salt)
-            .unwrap()
-            .to_string();
+        let password_hash = Argon2::new(
+            argon2::Algorithm::Argon2id,
+            argon2::Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
+        )
+        .hash_password(self.password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
         client
             .execute(
                 "INSERT INTO users (user_id, username, password_hash)
@@ -53,7 +56,7 @@ impl TestUser {
 pub struct TestApp {
     db_username: String,
     db_config_with_root_cred: DatabaseSettings,
-    test_user: TestUser,
+    pub test_user: TestUser,
     pub address: String,
     pub pool: Pool,
     pub email_server: MockServer,
@@ -68,13 +71,38 @@ impl TestApp {
     /// the first lines in this function.
     pub async fn spawn_app(mut config: Settings) -> TestApp {
         if let Ok(_) = std::env::var("TEST_TRACING") {
-            let subscriber = tracing_subscriber::fmt()
-                .with_max_level(tracing::Level::INFO)
-                .without_time()
-                .compact()
-                .with_level(true)
-                .finish();
-            let _ = tracing::subscriber::set_global_default(subscriber);
+            use tracing_subscriber::fmt::format::FmtSpan;
+            use tracing_subscriber::layer::SubscriberExt;
+            use tracing_subscriber::util::SubscriberInitExt;
+            use tracing_subscriber::EnvFilter;
+            use tracing_subscriber::Layer;
+
+            // Opentelemetry
+            let tracer = opentelemetry_jaeger::new_agent_pipeline()
+                .with_service_name("zero2prod_test")
+                .install_simple()
+                .unwrap();
+            let opentelemetry =
+                tracing_opentelemetry::layer().with_tracer(tracer);
+            // Console
+            let filter = EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info"));
+            let layer = tracing_subscriber::fmt::layer()
+                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                .with_filter(filter);
+
+            tracing_subscriber::registry()
+                .with(opentelemetry)
+                .with(layer)
+                .try_init()
+                .unwrap();
+            // let subscriber = tracing_subscriber::fmt()
+            //     .with_max_level(tracing::Level::INFO)
+            //     // .without_time()
+            //     .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            //     .with_level(true)
+            //     .finish();
+            // let _ = tracing::subscriber::set_global_default(subscriber);
         }
 
         // We should randomize app port
@@ -199,6 +227,7 @@ impl TestApp {
 
 impl Drop for TestApp {
     fn drop(&mut self) {
+        opentelemetry::global::shutdown_tracer_provider();
         // Clean pg
         let db_config = self.db_config_with_root_cred.clone();
         let db_username = self.db_username.clone();
