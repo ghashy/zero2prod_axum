@@ -1,5 +1,4 @@
-use anyhow::{anyhow, Context};
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use anyhow::Context;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -7,16 +6,13 @@ use base64::Engine;
 use deadpool_postgres::Client;
 use http::HeaderMap;
 use hyper::StatusCode;
-use secrecy::{ExposeSecret, Secret};
+use secrecy::Secret;
 
-use crate::cornucopia::queries::newsletters::query_user_id_by_credentials;
-use crate::cornucopia::queries::newsletters::{
-    query_confirmed_subscribers, QueryUserIdByCredentials,
-};
+use crate::authentication::{validate_credentials, AuthError, Credentials};
+use crate::cornucopia::queries::newsletters::query_confirmed_subscribers;
 use crate::domain::SubscriberEmail;
 use crate::error_chain_fmt;
 use crate::startup::AppState;
-use crate::telemetry::spawn_blocking_with_tracing;
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -69,12 +65,6 @@ impl IntoResponse for PublishError {
     }
 }
 
-#[allow(dead_code)]
-struct Credentials {
-    username: String,
-    password: Secret<String>,
-}
-
 #[tracing::instrument(
     name = "Publish a newsletter issue",
     skip(state, body),
@@ -110,7 +100,14 @@ pub async fn publish_newsletters(
         Ok(id) => id,
         Err(e) => {
             tracing::error!("Error: {e}");
-            return Err(e);
+            match e {
+                AuthError::InvalidCredentials(_) => {
+                    return Err(PublishError::AuthError(e.into()))
+                }
+                AuthError::UnexpectedError(_) => {
+                    return Err(PublishError::UnexpectedError(e.into()))
+                }
+            }
         }
     };
 
@@ -194,82 +191,4 @@ fn basic_authentication(
         username,
         password: Secret::new(password),
     })
-}
-
-// You might have also noticed that we no longer deal with the
-// salt directly - PHC string format takes care of it for us, implicitly.
-#[tracing::instrument(
-    name = "Validate credentials",
-    skip(username, password, client)
-)]
-async fn validate_credentials(
-    Credentials { username, password }: Credentials,
-    client: &Client,
-) -> Result<uuid::Uuid, PublishError> {
-    let (user_id, expected_password_hash) =
-        match get_stored_credentials(&username, client).await {
-            Ok(Some(query)) => {
-                (Some(query.user_id), Secret::new(query.password_hash))
-            }
-            Ok(None) => (
-                None,
-                Secret::new(
-                    "$argon2id$v=19$m=15000,t=2,p=1$\
-            gZiV/M1gPc22ElAH/Jh1Hw$\
-            CWOrkoo7oJBQ/iyh7uJ0LO2aLEfrHwTWllSAxT0zRno"
-                        .to_string(),
-                ),
-            ),
-            Err(e) => {
-                return Err(PublishError::AuthError(anyhow::anyhow!(
-                    "Unknown username: {e}"
-                )))
-            }
-        };
-
-    spawn_blocking_with_tracing(move || {
-        verify_password_hash(expected_password_hash, password)
-    })
-    .await
-    .context("Invalid password.")
-    .map_err(PublishError::AuthError)??;
-
-    user_id.ok_or_else(|| {
-        // We don't tell that it is unknown username
-        PublishError::AuthError(anyhow::anyhow!("Failed to auth."))
-    })
-}
-
-#[tracing::instrument(name = "Get stored credentials", skip(username, client))]
-async fn get_stored_credentials(
-    username: &str,
-    client: &Client,
-) -> Result<Option<QueryUserIdByCredentials>, PublishError> {
-    query_user_id_by_credentials()
-        .bind(client, &username)
-        .opt()
-        .await
-        .context("Failed to perform a query to validate auth credentials.")
-        .map_err(PublishError::UnexpectedError)
-}
-
-#[tracing::instrument(
-    name = "Verify password hash",
-    skip(expected_password_hash, password_candidate)
-)]
-fn verify_password_hash(
-    expected_password_hash: Secret<String>,
-    password_candidate: Secret<String>,
-) -> Result<(), PublishError> {
-    let expected_password_hash =
-        PasswordHash::new(&expected_password_hash.expose_secret())
-            .context("Failed to parse hash in PHC string format.")
-            .map_err(PublishError::UnexpectedError)?;
-    Argon2::default()
-        .verify_password(
-            password_candidate.expose_secret().as_bytes(),
-            &expected_password_hash,
-        )
-        .context("Invalid password")
-        .map_err(PublishError::AuthError)
 }

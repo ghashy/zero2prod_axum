@@ -12,8 +12,11 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set up tracing");
 
-    let config = Settings::load_configuration_from_env().unwrap();
-    // let config = Settings::load_configuration().unwrap();
+    let config = if let Ok(_) = std::env::var("RUSTEST") {
+        Settings::load_configuration().unwrap()
+    } else {
+        Settings::load_configuration_from_env().unwrap()
+    };
 
     if let Err(e) = Application::build(config)
         .await

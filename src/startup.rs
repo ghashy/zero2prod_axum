@@ -1,14 +1,14 @@
+// use native_tls::Identity;
 use axum::routing;
+use axum::serve::Serve;
 use axum::Router;
 use deadpool_postgres::Manager;
 use deadpool_postgres::ManagerConfig;
 use deadpool_postgres::Pool;
-// use native_tls::Identity;
-use tokio::net::TcpListener;
-
-use axum::serve::Serve;
 
 use secrecy::ExposeSecret;
+
+use tokio::net::TcpListener;
 use tokio_postgres::NoTls;
 
 use crate::configuration::DatabaseSettings;
@@ -17,6 +17,9 @@ use crate::email_client::EmailClient;
 use crate::routes::confirm;
 use crate::routes::get_hello;
 use crate::routes::health_check;
+use crate::routes::home;
+use crate::routes::login;
+use crate::routes::login_form;
 use crate::routes::publish_newsletters;
 use crate::routes::subscribe_handler;
 
@@ -43,17 +46,20 @@ impl Application {
     ///
     /// This functions builds a new `Application` with given configuration.
     /// It also configures a pool of connections to the PostgreSQL database.
-    pub async fn build(configuration: Settings) -> Result<Application, std::io::Error> {
-        let postgres_connection = get_postgres_connection_pool(&configuration.database);
+    pub async fn build(
+        configuration: Settings,
+    ) -> Result<Application, std::io::Error> {
+        let postgres_connection =
+            get_postgres_connection_pool(&configuration.database);
 
         db_migration::run_migration(&postgres_connection).await;
 
         let timeout = configuration.email_client.timeout_millis();
 
-        let sender_email = configuration
-            .email_client
-            .sender()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let sender_email =
+            configuration.email_client.sender().map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+            })?;
 
         let email_client = EmailClient::new(
             configuration.email_client.base_url,
@@ -62,9 +68,12 @@ impl Application {
             timeout,
             configuration.email_delivery_service,
         )
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+        })?;
 
-        let address = format!("{}:{}", configuration.app_addr, configuration.app_port);
+        let address =
+            format!("{}:{}", configuration.app_addr, configuration.app_port);
         tracing::info!("running on {} address", address);
         let listener = TcpListener::bind(address).await?;
         let port = listener.local_addr()?.port();
@@ -109,6 +118,9 @@ impl Application {
             .route("/subscriptions", routing::post(subscribe_handler))
             .route("/subscriptions/confirm", routing::get(confirm))
             .route("/newsletters", routing::post(publish_newsletters))
+            .route("/login", routing::get(login_form))
+            .route("/login", routing::post(login))
+            .route("/", routing::get(home))
             .with_state(app_state);
 
         axum::serve(listener, app)
@@ -137,16 +149,16 @@ fn get_pg_conf(configuration: &DatabaseSettings) -> tokio_postgres::Config {
     config
 }
 
-// fn get_ssl_connector() -> postgres_native_tls::MakeTlsConnector {
-//     let root_file = std::fs::read("db/center/out/myCA.crt").unwrap();
-//     let root = native_tls::Certificate::from_pem(&root_file).unwrap();
-//     let mut builder = native_tls::TlsConnector::builder();
-//     builder.add_root_certificate(root);
+fn _get_ssl_connector() -> postgres_native_tls::MakeTlsConnector {
+    let root_file = std::fs::read("db/center/out/myCA.crt").unwrap();
+    let root = native_tls::Certificate::from_pem(&root_file).unwrap();
+    let mut builder = native_tls::TlsConnector::builder();
+    builder.add_root_certificate(root);
 
-//     // Accept invalid host ssl only in development.
-//     #[cfg(debug_assertions)]
-//     let builder = builder.danger_accept_invalid_hostnames(true);
+    // Accept invalid host ssl only in development.
+    #[cfg(debug_assertions)]
+    let builder = builder.danger_accept_invalid_hostnames(true);
 
-//     let connector = builder.build().unwrap();
-//     postgres_native_tls::MakeTlsConnector::new(connector)
-// }
+    let connector = builder.build().unwrap();
+    postgres_native_tls::MakeTlsConnector::new(connector)
+}
